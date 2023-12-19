@@ -53,14 +53,7 @@ stages:
           command: 'build'
           projects: |
             src/**/*.csproj
-            !src/**/Generated*.csproj
           arguments: '--configuration $(buildConfiguration)'
-      - task: DotNetCoreCLI@2
-        displayName: 'Build samples'
-        inputs:
-          command: 'build'
-          projects:  'samples/**/*.csproj'
-          arguments: '--configuration $(buildConfiguration)'          
       - task: DotNetCoreCLI@2
         displayName: 'Test'
         inputs:
