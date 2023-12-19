@@ -1,0 +1,21 @@
+<Project>
+    <PropertyGroup>
+        <BaseDirectoryBuildPath>$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))</BaseDirectoryBuildPath>
+    </PropertyGroup>
+    <Import Condition="Exists($(BaseDirectoryBuildPath))" Project="$(BaseDirectoryBuildPath)" />
+    <PropertyGroup>
+        <Authors>meshmakers GmbH and Contributors</Authors>
+        <Company>meshmakers GmbH and Contributors</Company>
+        <Copyright>(c) 2022-2024 meshmakers GmbH</Copyright>
+        <LangVersion>latestmajor</LangVersion>
+        <Nullable>enable</Nullable>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+        <ImplicitUsings>true</ImplicitUsings>
+        <RepositoryUrl>https://github.com/meshmakers/octo-construction-kit-compiler</RepositoryUrl>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
+        <PackageProjectUrl>https://www.meshmakers.io</PackageProjectUrl>
+        <PackageTags>Octo data mesh iot</PackageTags>
+        <TargetFramework>net7.0</TargetFramework>
+        <UserSecretsId>04bcde24-0d21-4346-8459-3bca58abec33</UserSecretsId>
+    </PropertyGroup>
+</Project>
