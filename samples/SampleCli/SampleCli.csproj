@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <AssemblyName>octo-distevents-monitor</AssemblyName>
+        <PackageId>SampleCli</PackageId>
+        <RootNamespace>SampleCli</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Meshmakers.Common.CommandLineParser" Version="4.0.2309.9001" />
+        <PackageReference Include="Meshmakers.Common.Configuration" Version="4.0.2309.9001" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+        <PackageReference Include="NLog" Version="5.2.7" />
+        <PackageReference Include="NLog.Extensions.Logging" Version="5.3.7" />
+        <PackageReference Include="NLog.Schema" Version="5.2.7" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="nlog.config">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\SampleEvents\SampleEvents.csproj" />
+    </ItemGroup>
+        
+</Project>

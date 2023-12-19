@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <AssemblyName>Meshmakers.Octo.Common.DistributionEventHub</AssemblyName>
+        <IsPackable>true</IsPackable>
+        <PackageId>Meshmakers.Octo.Common.DistributionEventHub</PackageId>
+        <RootNamespace>Meshmakers.Octo.Common.DistributionEventHub</RootNamespace>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+        <OutputPath>..\..\bin\Debug\</OutputPath>
+        <DocumentationFile>..\..\bin\Debug\Meshmakers.Octo.Common.DistributedCache.xml</DocumentationFile>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+        <OutputPath>..\..\bin\Release\</OutputPath>
+        <DocumentationFile>..\..\bin\Release\Meshmakers.Octo.Common.DistributedCache.xml</DocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="MassTransit.RabbitMQ" Version="8.1.2" />
+        <PackageReference Include="Meshmakers.Common.Shared" Version="4.0.2309.9001"/>
+        <PackageReference Include="Meshmakers.Octo.ConstructionKit.Contracts" Version="0.0.2312.12001" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.0" />
+        <PackageReference Include="MongoDB.Driver" Version="2.23.1" PrivateAssets="all"  />
+        <PackageReference Include="MongoDB.Driver.GridFS" Version="2.23.1" PrivateAssets="all"  />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\..\assets\meshmakers64.png">
+            <Pack>True</Pack>
+            <PackagePath/>
+            <Link>meshmakers64.png</Link>
+        </None>
+        <None Remove="Channels\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="Channels\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="Channels\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Messaging\" />
+    </ItemGroup>
+
+</Project>

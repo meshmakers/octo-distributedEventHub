@@ -1,0 +1,35 @@
+steps:
+- task: Assembly-Info-NetCore@3
+  displayName: "Setting version number to $(Build.BuildNumber)"
+  inputs:
+    FileNames: |
+      **/*.csproj
+      !src/ConstructionKit.Templates/Templates/**/*.csproj
+    InsertAttributes: true
+    FileEncoding: 'auto'
+    Product: $(Build.SourceBranchName) - $(Build.SourceVersion) (release)
+    VersionNumber: $(MajorVersion).$(MinorVersion).0.0
+    FileVersionNumber: $(Build.BuildNumber)
+    InformationalVersion: $(Build.BuildNumber)
+    PackageVersion: $(Build.BuildNumber)
+    DisableTelemetry: true
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
+    script: |
+      # Replace placeholder in a file with build number
+      $file = '$(Build.SourcesDirectory)/src/ConstructionKit.SourceGeneration/build/Meshmakers.Octo.ConstructionKit.SourceGeneration.targets'
+      $fileContent = Get-Content $file
+      $fileContent = $fileContent -replace '0.0.0.0', '$(Build.BuildNumber)'
+      $fileContent | Set-Content $file
+  displayName: 'Updates dotnet targets compiler version'
+- task: PowerShell@2
+  inputs:
+    targetType: 'inline'
+    script: |
+      # Replace placeholder in a file with build number
+      $file = '$(Build.SourcesDirectory)/src/ConstructionKit.Templates/Templates/ConstructionKit.CSharp/GeneratedConstructionKitProject.csproj'
+      $fileContent = Get-Content $file
+      $fileContent = $fileContent -replace '0.0.0.0', '$(Build.BuildNumber)'
+      $fileContent | Set-Content $file
+  displayName: 'Updates project template version'    
