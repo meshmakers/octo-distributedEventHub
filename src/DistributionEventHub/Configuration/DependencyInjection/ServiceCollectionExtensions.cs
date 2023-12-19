@@ -80,7 +80,6 @@ public static class ServiceCollectionExtensions
             //   x.AddCommandClient<CheckOrderStatus>(new Uri("exchange:order-status"));
             
             Uri schedulerEndpoint = new Uri("queue:scheduler");
-    
             x.AddMessageScheduler(schedulerEndpoint);
 
             x.UsingRabbitMq((context, cfg) =>
@@ -88,7 +87,7 @@ public static class ServiceCollectionExtensions
                 cfg.UseMessageScheduler(schedulerEndpoint);
 
                 cfg.ConfigureEndpoints(context);
-                cfg.UseInMemoryOutbox(context);
+              //  cfg.UseInMemoryOutbox(context);
 
                 // cfg.ReceiveEndpoint("saga-queue", (IReceiveEndpointConfigurator e) =>
                 // {

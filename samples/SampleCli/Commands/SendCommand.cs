@@ -4,7 +4,6 @@ using Meshmakers.Octo.Common.DistributionEventHub.Commands;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SampleCli.Configuration.Options;
-using SampleEvents.Consumers;
 using SampleEvents.Messages;
 
 namespace SampleCli.Commands;
