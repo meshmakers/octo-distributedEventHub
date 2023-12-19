@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <AssemblyName>Meshmakers.Octo.Common.DistributionEventHub</AssemblyName>
-        <IsPackable>true</IsPackable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>Meshmakers.Octo.Common.DistributionEventHub</PackageId>
         <RootNamespace>Meshmakers.Octo.Common.DistributionEventHub</RootNamespace>
     </PropertyGroup>
@@ -33,15 +33,11 @@
             <PackagePath/>
             <Link>meshmakers64.png</Link>
         </None>
-        <None Remove="Channels\**" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Compile Remove="Channels\**" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <EmbeddedResource Remove="Channels\**" />
+        <None Include="..\..\LICENSE">
+            <Pack>True</Pack>
+            <PackagePath />
+            <Link>LICENSE</Link>
+        </None>
     </ItemGroup>
 
 </Project>
