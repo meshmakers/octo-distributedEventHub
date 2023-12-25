@@ -1,4 +1,4 @@
-using Meshmakers.Octo.ConstructionKit.Contracts;
+using MongoDB.Bson;
 using MongoDB.Driver.GridFS;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Repository;
@@ -17,7 +17,7 @@ internal class DownloadStreamHandler : IDownloadStreamHandler
         _stream.Dispose();
     }
 
-    public OctoObjectId Id => _stream.FileInfo.Id.ToOctoObjectId();
+    public ObjectId Id => _stream.FileInfo.Id;
     public string ContentType => _stream.FileInfo.Metadata.GetValue(CacheCommon.ContentType).AsBsonValue.AsString;
     public DateTime UploadDateTime => _stream.FileInfo.UploadDateTime;
     public Stream Stream => _stream;
