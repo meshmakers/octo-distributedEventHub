@@ -1,4 +1,4 @@
-using Meshmakers.Octo.Common.DistributionEventHub.Commands;
+using Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 using Microsoft.Extensions.Logging;
 using SampleEvents.Messages;
 

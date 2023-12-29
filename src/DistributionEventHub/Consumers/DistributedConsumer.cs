@@ -1,8 +1,9 @@
 using MassTransit;
 using Microsoft.Extensions.Logging;
 
-namespace Meshmakers.Octo.Common.DistributionEventHub.Commands;
+namespace Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 
+// ReSharper disable once ClassNeverInstantiated.Global
 internal class DistributedConsumer<TConsumer, TMessage> : IConsumer<TMessage>
     where TConsumer : class, IDistributedConsumer<TMessage>
     where TMessage : class
@@ -20,7 +21,7 @@ internal class DistributedConsumer<TConsumer, TMessage> : IConsumer<TMessage>
 
     public Task Consume(ConsumeContext<TMessage> context)
     {
-        _logger.LogInformation("Distributed consumer received message");
+        _logger.LogInformation("Received message of type '{MessageType}'", typeof(TMessage).Name);
         var distributedContext = new DistributedContext<TMessage>(_loggerFactory.CreateLogger<DistributedContext<TMessage>>(), context);
         return _consumer.ConsumeAsync(distributedContext);
     }

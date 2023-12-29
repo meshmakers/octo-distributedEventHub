@@ -11,8 +11,15 @@ internal class DistributionEventHubService : IDistributionEventHubService
         _bus = bus;
     }
     
-    public Task PublishAsync<T>(T message, CancellationToken? cancellationToken = null) where T : class
+    public async Task PublishAsync<T>(T message, CancellationToken? cancellationToken = null) where T : class
     {
-        return _bus.Publish(message, cancellationToken ?? CancellationToken.None);
+        var endpoint = await _bus.GetPublishSendEndpoint<T>().ConfigureAwait(false);
+        await endpoint.Send(message, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
+    }
+    
+    public async Task<Task> SendAsync<T>(Uri address, T message, CancellationToken? cancellationToken = null) where T : class
+    {
+        var endpoint = await _bus.GetSendEndpoint(address).ConfigureAwait(false);
+        return endpoint.Send(message, cancellationToken ?? CancellationToken.None);
     }
 }

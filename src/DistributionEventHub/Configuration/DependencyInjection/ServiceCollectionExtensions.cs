@@ -1,4 +1,5 @@
 using MassTransit;
+using Meshmakers.Octo.Common.DistributionEventHub;
 using Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 using Meshmakers.Octo.Common.DistributionEventHub.Configuration.Options;
 using Meshmakers.Octo.Common.DistributionEventHub.Repository;
@@ -57,6 +58,10 @@ public static class ServiceCollectionExtensions
         var configuration = new DistributionEventHubConfiguration(services);
         configurationAction.Invoke(configuration);
 
+        if (string.IsNullOrWhiteSpace(configuration.UniqueServiceAddress))
+        {
+            throw DistributedOperationFailedException.NoUniqueServiceAddress();
+        }
 
         services.ConfigureOptions<ConfigureRabbitMqTransportOptions>();
 
@@ -64,51 +69,20 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ITenantResolver, DefaultTenantResolver>();
         services.TryAddSingleton<IRepositoryClient, RepositoryClient>();
         services.TryAddSingleton<IDistributionEventHubService, DistributionEventHubService>();
-        services.AddSingleton<IServiceContext>(p => new ServiceContext(configuration.UniqueServiceAddress));
+        services.AddSingleton<IBroadcastServiceAddress>(p => new BroadcastServiceAddress(configuration.UniqueServiceAddress));
         services.AddTransient<IEventHubControl, EventHubControl>();
 
         services.AddMassTransit();
 
         configuration.ConfigureMassTransit(x =>
         {
-            // configure the consumer on a specific endpoint address
-            //  x.AddConsumer<CheckOrderStatusConsumer>()
-            //       .Endpoint(e => e.Name = "order-status");
-            //  x.AddConsumers(configuration.ConsumerAssemblies.ToArray());
-
-            // Sends the request to the specified address, instead of publishing it
-            //   x.AddCommandClient<CheckOrderStatus>(new Uri("exchange:order-status"));
-            
             Uri schedulerEndpoint = new Uri("queue:scheduler");
             x.AddMessageScheduler(schedulerEndpoint);
 
             x.UsingRabbitMq((context, cfg) =>
             {
                 cfg.UseMessageScheduler(schedulerEndpoint);
-
                 cfg.ConfigureEndpoints(context);
-              //  cfg.UseInMemoryOutbox(context);
-
-                // cfg.ReceiveEndpoint("saga-queue", (IReceiveEndpointConfigurator e) =>
-                // {
-                // const int concurrencyLimit = 20; // this can go up, depending upon the database capacity
-                //
-                // e.PrefetchCount = concurrencyLimit;
-                //
-                // e.UseMessageRetry(r => r.Interval(5, 1000));
-                // e.UseInMemoryOutbox(context);
-                //
-                //     e.ConfigureSaga<OrderState>(context, s =>
-                //     {
-                //         var partition = cfg.CreatePartitioner(concurrencyLimit);
-                //         if (partition != null)
-                //         {
-                //             s.Message<SubmitOrder>(x => x.UsePartitioner(partition, m => m.Message.CorrelationId));
-                //             s.Message<OrderAccepted>(x => x.UsePartitioner(partition, m => m.Message.CorrelationId));
-                //             // s.Message<OrderCanceled>(x => x.UsePartitioner(partition, m => m.Message.CorrelationId));
-                //         }
-                    // });
-              //  });
             });
         });
 
