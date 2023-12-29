@@ -17,11 +17,11 @@ namespace SampleServiceMoon
                 .ConfigureServices((hostContext, services) =>
                 {
                     services.Configure<DistributionEventHubOptions>(options => hostContext.Configuration.GetSection("DistributionEventHub").Bind(options));
-                    services.AddDistributionEventHub((configuration) =>
+                    services.AddDistributionEventHub(configuration =>
                     {
                         configuration.UniqueServiceAddress = "SampleServiceMoon";
                         
-                        configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>("SampleServiceMoon");
+                        configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>();
                         configuration.AddCommandConsumer<ReserveStockRequestConsumer, ReserveStockRequest>("reserve-stock");
                     });
                 });

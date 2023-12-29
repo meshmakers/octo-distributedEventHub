@@ -1,4 +1,4 @@
-namespace Meshmakers.Octo.Common.DistributionEventHub.Commands;
+namespace Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 
 /// <summary>
 /// Interface to retrieve an distributed invoke.

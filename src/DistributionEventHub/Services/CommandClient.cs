@@ -1,6 +1,6 @@
 using MassTransit;
 
-namespace Meshmakers.Octo.Common.DistributionEventHub.Commands;
+namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 /// <summary>
 /// Implements the <see cref="ICommandClient{TRequest}"/> interface. 

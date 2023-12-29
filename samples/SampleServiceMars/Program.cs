@@ -22,8 +22,8 @@ namespace SampleServiceMars
                     {
                         configuration.UniqueServiceAddress = "SampleServiceMars";
                        configuration.AddCommandConsumer<SampleCommandRequestConsumer, SampleCommandRequest>("SampleCommandRequest");
-                       configuration.AddDirectMessageConsumer<CreateTenantConsumer, CreateTenant>();
-                       configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>("SampleServiceMars");
+                       configuration.AddRoutedEventConsumer<CreateTenantConsumer, CreateTenant>();
+                       configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>();
                        configuration.AddCommandClient<ReserveStockRequest>("reserve-stock");
                        configuration.AddSagaStateMachine<OrderStateMachine, OrderState>()
                            .MongoDbRepository(r =>

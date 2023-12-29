@@ -19,8 +19,8 @@ namespace SampleServiceEarth
                     services.AddDistributionEventHub((configuration) =>
                     {
                         configuration.UniqueServiceAddress = "SampleServiceEarth";
-                        configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>("SampleServiceEarth");
-                        configuration.AddDirectMessageConsumer<OrderAcceptedConsumer, OrderAccepted>();
+                        configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>();
+                        configuration.AddRoutedEventConsumer<OrderAcceptedConsumer, OrderAccepted>();
                     });
                 });
     }

@@ -1,7 +1,7 @@
 using MassTransit;
 using Microsoft.Extensions.Logging;
 
-namespace Meshmakers.Octo.Common.DistributionEventHub.Commands;
+namespace Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 
 internal class DistributedContext<TMessage> : IDistributedContext<TMessage>
     where TMessage : class

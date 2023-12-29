@@ -1,5 +1,5 @@
 using MassTransit;
-using Meshmakers.Octo.Common.DistributionEventHub.Commands;
+using Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 
@@ -37,10 +37,9 @@ public interface IDistributionEventHubConfiguration
     /// Adds a broadcast event consumer to the DI container, by providing the service name and the consumer type.
     /// Broadcast events are received by all instances of services.
     /// </summary>
-    /// <param name="serviceName">Unique name of service (e. g. my-service)</param>
     /// <typeparam name="TConsumer">The consumer type class</typeparam>
     /// <typeparam name="TMessage">Type of incoming message</typeparam>
-    void AddBroadcastEventConsumer<TConsumer, TMessage>(string serviceName)
+    void AddBroadcastEventConsumer<TConsumer, TMessage>()
         where TConsumer : class, IDistributedConsumer<TMessage>
         where TMessage : class;
 
@@ -50,7 +49,7 @@ public interface IDistributionEventHubConfiguration
     /// </summary>
     /// <typeparam name="TConsumer">The consumer type class</typeparam>
     /// <typeparam name="TMessage">Type of incoming message</typeparam>
-    void AddDirectMessageConsumer<TConsumer, TMessage>()
+    void AddRoutedEventConsumer<TConsumer, TMessage>()
         where TConsumer : class, IDistributedConsumer<TMessage>
         where TMessage : class;
 

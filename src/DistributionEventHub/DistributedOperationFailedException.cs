@@ -34,4 +34,10 @@ public class DistributedOperationFailedException : DistributionException
         return new DistributedOperationFailedException(
             $"Command {commandName} failed.", inner);
     }
+
+    internal static Exception NoUniqueServiceAddress()
+    {
+        return new DistributedOperationFailedException(
+            "Unique service address is not set. Please set the UniqueServiceAddress property.");
+    }
 }

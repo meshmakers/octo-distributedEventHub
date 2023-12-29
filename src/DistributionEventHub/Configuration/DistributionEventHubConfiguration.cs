@@ -1,6 +1,7 @@
 using MassTransit;
 using MassTransit.Configuration;
-using Meshmakers.Octo.Common.DistributionEventHub.Commands;
+using Meshmakers.Octo.Common.DistributionEventHub.Consumers;
+using Meshmakers.Octo.Common.DistributionEventHub.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Configuration;
@@ -12,19 +13,19 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
 {
     private readonly IServiceCollection _serviceCollection;
     private readonly ServiceCollectionBusConfigurator _busConfigurator;
-    
+
     public DistributionEventHubConfiguration(IServiceCollection serviceCollection)
     {
         _serviceCollection = serviceCollection;
         _busConfigurator = new ServiceCollectionBusConfigurator(serviceCollection);
     }
-    
+
     /// <summary>
     /// Gets or sets the unique service name.
     /// </summary>
     public string UniqueServiceAddress { get; set; } = string.Empty;
 
-    public void AddCommandClient<TRequest>(string commandName, TimeSpan? timeout = default) 
+    public void AddCommandClient<TRequest>(string commandName, TimeSpan? timeout = default)
         where TRequest : class
     {
         var requestTimeout = timeout ?? RequestTimeout.Default;
@@ -36,37 +37,39 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
         where TConsumer : class, IDistributedConsumer<TMessage>
         where TMessage : class
     {
-        _busConfigurator.AddConsumer<DistributedConsumer<TConsumer,TMessage>>()
-            .Endpoint(e =>
-            {
-                e.Name = commandName;
-                e.Temporary = true;
-            });
-        _serviceCollection.AddScoped<TConsumer>();
-    }
-    
-    public void AddBroadcastEventConsumer<TConsumer, TMessage>(string serviceName)
-        where TConsumer : class, IDistributedConsumer<TMessage>
-        where TMessage : class
-    {
         _busConfigurator.AddConsumer<DistributedConsumer<TConsumer, TMessage>>()
-            .Endpoint(e =>
+            .Endpoint(c =>
             {
-                e.ConcurrentMessageLimit = 4;
-                e.Name = serviceName;
+                c.Name = commandName;
+                c.Temporary = true;
+                c.ConfigureConsumeTopology = false;
             });
-        _serviceCollection.AddScoped<TConsumer>();
-    }
-    
-    public void AddDirectMessageConsumer<TConsumer, TMessage>()
-        where TConsumer : class, IDistributedConsumer<TMessage>
-        where TMessage : class
-    {
-        _busConfigurator.AddConsumer<DistributedConsumer<TConsumer, TMessage>>();
         _serviceCollection.AddScoped<TConsumer>();
     }
 
-    public ISagaRegistrationConfigurator<T> AddSagaStateMachine<TStateMachine, T>(Action<IRegistrationContext, ISagaConfigurator<T>>? configure = null) where TStateMachine : class, SagaStateMachine<T> where T : class, SagaStateMachineInstance
+    public void AddBroadcastEventConsumer<TConsumer, TMessage>()
+        where TConsumer : class, IDistributedConsumer<TMessage>
+        where TMessage : class
+    {
+        _busConfigurator
+            .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
+                BroadcastEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>();
+        _serviceCollection.AddScoped<TConsumer>();
+    }
+
+    public void AddRoutedEventConsumer<TConsumer, TMessage>()
+        where TConsumer : class, IDistributedConsumer<TMessage>
+        where TMessage : class
+    {
+        _busConfigurator
+            .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
+                RoutedEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>();
+        _serviceCollection.AddScoped<TConsumer>();
+    }
+
+    public ISagaRegistrationConfigurator<T>
+        AddSagaStateMachine<TStateMachine, T>(Action<IRegistrationContext, ISagaConfigurator<T>>? configure = null)
+        where TStateMachine : class, SagaStateMachine<T> where T : class, SagaStateMachineInstance
     {
         return _busConfigurator.AddSagaStateMachine<TStateMachine, T>();
     }

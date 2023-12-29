@@ -1,4 +1,4 @@
-namespace Meshmakers.Octo.Common.DistributionEventHub.Commands;
+namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 /// <summary>
 /// Interface of a command client
