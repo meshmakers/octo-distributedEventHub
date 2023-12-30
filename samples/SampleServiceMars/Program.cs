@@ -24,6 +24,7 @@ namespace SampleServiceMars
                        configuration.AddCommandConsumer<SampleCommandRequestConsumer, SampleCommandRequest>("SampleCommandRequest");
                        configuration.AddRoutedEventConsumer<CreateTenantConsumer, CreateTenant>();
                        configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>();
+                       configuration.AddBroadcastEventConsumer<BroadcastTestConsumer, BroadcastTest>();
                        configuration.AddCommandClient<ReserveStockRequest>("reserve-stock");
                        configuration.AddSagaStateMachine<OrderStateMachine, OrderState>()
                            .MongoDbRepository(r =>
