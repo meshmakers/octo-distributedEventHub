@@ -20,6 +20,7 @@ namespace SampleServiceEarth
                     {
                         configuration.UniqueServiceAddress = "SampleServiceEarth";
                         configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>();
+                        configuration.AddBroadcastEventConsumer<BroadcastTestConsumer, BroadcastTest>();
                         configuration.AddRoutedEventConsumer<OrderAcceptedConsumer, OrderAccepted>();
                     });
                 });

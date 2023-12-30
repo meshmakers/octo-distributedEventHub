@@ -14,15 +14,10 @@ public class CreateTenantConsumer :
         _logger = logger;
     }
 
-    public Task ConsumeAsync(IDistributedContext<CreateTenant> context)
+    public async Task ConsumeAsync(IDistributedContext<CreateTenant> context)
     {
         _logger.LogInformation("Create Tenant received: {Text}", context.Message.TenantId);
 
-        return Task.CompletedTask;
-
-        // await context.Publish<OrderSubmitted>(new
-        // {
-        //     OrderId = context.Message.TenantId
-        // });
+        await context.PublishAsync(new BroadcastTest { TenantId = context.Message.TenantId });
     }
 }

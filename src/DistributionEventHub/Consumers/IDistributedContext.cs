@@ -20,4 +20,12 @@ public interface IDistributedContext<out TMessage>
     /// <param name="message">The message to send in response</param>
     Task RespondAsync<T>(T message)
         where T : class;
+
+    /// <summary>
+    /// Publishes a message to the bus, which will be delivered to all consumers of the message type.
+    /// </summary>
+    /// <typeparam name="T">The type of the message to respond with.</typeparam>
+    /// <param name="message">The message to send in response</param>
+    /// <returns></returns>
+    Task PublishAsync<T>(T message) where T : class;
 }

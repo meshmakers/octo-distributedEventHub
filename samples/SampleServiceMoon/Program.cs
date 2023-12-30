@@ -22,6 +22,7 @@ namespace SampleServiceMoon
                         configuration.UniqueServiceAddress = "SampleServiceMoon";
                         
                         configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>();
+                        configuration.AddBroadcastEventConsumer<BroadcastTestConsumer, BroadcastTest>();
                         configuration.AddCommandConsumer<ReserveStockRequestConsumer, ReserveStockRequest>("reserve-stock");
                     });
                 });

@@ -19,7 +19,13 @@ internal class DistributedContext<TMessage> : IDistributedContext<TMessage>
     
     public Task RespondAsync<T>(T message) where T : class
     {
-        _logger.LogInformation("{TMessage} Responding to message with {T}", typeof(TMessage), typeof(T));
+        _logger.LogInformation("{TMessage}: Responding to message with message type '{T}'", typeof(TMessage), typeof(T));
         return _context.RespondAsync(message);
+    }
+    
+    public Task PublishAsync<T>(T message) where T : class
+    {
+        _logger.LogInformation("{TMessage}: Publish message with {T}", typeof(TMessage), typeof(T));
+        return _context.Publish(message);
     }
 }

@@ -19,10 +19,5 @@ public class ReloadTenantConsumer :
         _logger.LogInformation("Reload Tenant received: {Text}", context.Message.TenantId);
 
         return Task.CompletedTask;
-
-        // await context.Publish<OrderSubmitted>(new
-        // {
-        //     OrderId = context.Message.TenantId
-        // });
     }
 }
