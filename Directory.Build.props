@@ -18,5 +18,6 @@
         <PackageTags>Octo data mesh iot</PackageTags>
         <TargetFramework>net8.0</TargetFramework>
         <UserSecretsId>04bcde24-0d21-4346-8459-3bca58abec33</UserSecretsId>
+        <PackageVersion>999.0.0</PackageVersion>
     </PropertyGroup>
 </Project>
