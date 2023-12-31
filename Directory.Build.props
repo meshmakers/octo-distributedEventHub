@@ -11,13 +11,14 @@
         <Nullable>enable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
         <ImplicitUsings>true</ImplicitUsings>
-        <RepositoryUrl>https://github.com/meshmakers/octo-construction-kit-compiler</RepositoryUrl>
+        <RepositoryUrl>https://github.com/meshmakers/octo-distributedEventHub</RepositoryUrl>
         <PackageIcon>meshmakers64.png</PackageIcon>
         <PackageLicenseFile>LICENSE</PackageLicenseFile>
         <PackageProjectUrl>https://www.meshmakers.io</PackageProjectUrl>
         <PackageTags>Octo data mesh iot</PackageTags>
         <TargetFramework>net8.0</TargetFramework>
         <UserSecretsId>04bcde24-0d21-4346-8459-3bca58abec33</UserSecretsId>
-        <PackageVersion>999.0.0</PackageVersion>
+        <PackageVersion Condition="'$(Configuration)'=='DebugL'">999.0.0</PackageVersion>
+        <RestoreSources Condition="'$(Configuration)'=='DebugL'">$(MSBuildThisFileDirectory)../nuget</RestoreSources>
     </PropertyGroup>
 </Project>

@@ -5,12 +5,22 @@
         <AssemblyName>octo-distevents-monitor</AssemblyName>
         <PackageId>SampleCli</PackageId>
         <RootNamespace>SampleCli</RootNamespace>
+        <Configurations>Debug;Release;DebugL</Configurations>
+        <Platforms>AnyCPU</Platforms>
     </PropertyGroup>
 
-    <ItemGroup>
+    <ItemGroup Condition="'$(Configuration)'!='DebugL'">
         <PackageReference Include="Meshmakers.Common.CommandLineParser" Version="4.0.2312.30002" />
         <PackageReference Include="Meshmakers.Common.Configuration" Version="4.0.2312.30002" />
-        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.0" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(Configuration)'=='DebugL'">
+        <PackageReference Include="Meshmakers.Common.CommandLineParser" Version="999.0.0" />
+        <PackageReference Include="Meshmakers.Common.Configuration" Version="999.0.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+         <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.0" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
         <PackageReference Include="NLog" Version="5.2.8" />
