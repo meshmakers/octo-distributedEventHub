@@ -19,5 +19,5 @@ public interface ITenantResolver
     /// </summary>
     /// <param name="tenantId">The tenant id if existing</param>
     /// <returns>Database name</returns>
-    Task<string> GetRepositoryNameAsync(string? tenantId = null);
+    Task<string> GetRepositoryNameAsync(string tenantId);
 }

@@ -23,7 +23,7 @@ internal class DistributedCacheService : IDistributedCacheService
     }
 
     /// <inheritdoc />
-    public async Task<string> CacheStreamAsync(string? tenantId, Stream stream, string contentType, string fileName,
+    public async Task<string> CacheStreamAsync(string tenantId, Stream stream, string contentType, string fileName,
         TimeSpan? expiry = null)
     {
         var repositoryName = await _tenantResolver.GetRepositoryNameAsync(tenantId).ConfigureAwait(false);
@@ -32,7 +32,7 @@ internal class DistributedCacheService : IDistributedCacheService
     }
 
     /// <inheritdoc />
-    public async Task DeleteCacheStreamAsync(string? tenantId, string cacheStreamKey)
+    public async Task DeleteCacheStreamAsync(string tenantId, string cacheStreamKey)
     {
         var repositoryName = await _tenantResolver.GetRepositoryNameAsync(tenantId).ConfigureAwait(false);
         var persistentRepository = await _repositoryClient.GetRepositoryAsync(repositoryName).ConfigureAwait(false);
@@ -40,7 +40,7 @@ internal class DistributedCacheService : IDistributedCacheService
     }
 
     /// <inheritdoc />
-    public async Task<CacheStream?> GetCacheStreamAsync(string? tenantId, string cacheStreamKey)
+    public async Task<CacheStream?> GetCacheStreamAsync(string tenantId, string cacheStreamKey)
     {
         var repositoryName = await _tenantResolver.GetRepositoryNameAsync(tenantId).ConfigureAwait(false);
         var persistentRepository = await _repositoryClient.GetRepositoryAsync(repositoryName).ConfigureAwait(false);

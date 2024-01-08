@@ -31,11 +31,7 @@ public class GetCacheFileCommand : Command<OctoMonitoringOptions>
         var path = CommandArgumentValue.GetArgumentScalarValue<string>(_pathArg);
         var id = CommandArgumentValue.GetArgumentScalarValue<string>(_cacheKeyArg);
 
-        string? tenantId = null;
-        if (CommandArgumentValue.IsArgumentUsed(_tenantIdArg))
-        {
-            tenantId = CommandArgumentValue.GetArgumentScalarValue<string>(_tenantIdArg);
-        }
+        var tenantId = CommandArgumentValue.GetArgumentScalarValue<string>(_tenantIdArg);
 
         Logger.LogInformation("Get file cache command executing");
 

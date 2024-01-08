@@ -63,4 +63,9 @@ public interface IDistributionEventHubConfiguration
     ISagaRegistrationConfigurator<T> AddSagaStateMachine<TStateMachine, T>(Action<IRegistrationContext, ISagaConfigurator<T>>? configure = null)
         where TStateMachine : class, SagaStateMachine<T>
         where T : class, SagaStateMachineInstance;
+
+    /// <summary>
+    /// Adds a message scheduler using Hangfire to the DI container
+    /// </summary>
+    void AddHangfireMessageScheduler();
 }

@@ -24,6 +24,11 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
     /// Gets or sets the unique service name.
     /// </summary>
     public string UniqueServiceAddress { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Use the publish message scheduler to schedule messages using the Hangfire scheduler
+    /// </summary>
+    public bool UsePublishMessageScheduler { get; private set; } 
 
     public void AddCommandClient<TRequest>(string commandName, TimeSpan? timeout = default)
         where TRequest : class
@@ -72,6 +77,15 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
         where TStateMachine : class, SagaStateMachine<T> where T : class, SagaStateMachineInstance
     {
         return _busConfigurator.AddSagaStateMachine<TStateMachine, T>();
+    }
+
+    public void AddHangfireMessageScheduler()
+    {
+        UsePublishMessageScheduler = true;
+        
+        _busConfigurator.AddPublishMessageScheduler();
+
+        _busConfigurator.AddHangfireConsumers();
     }
 
     internal void ConfigureMassTransit(Action<IBusRegistrationConfigurator> action)
