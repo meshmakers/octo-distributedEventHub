@@ -10,5 +10,5 @@ public interface TenantSagaStateMachineInstance : SagaStateMachineInstance
     /// <summary>
     /// Gets or sets the current tenant id of the saga instance
     /// </summary>
-    public string? TenantId { get; set; }
+    public string TenantId { get; set; }
 }

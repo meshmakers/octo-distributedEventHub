@@ -19,6 +19,6 @@
         <TargetFramework>net8.0</TargetFramework>
         <UserSecretsId>04bcde24-0d21-4346-8459-3bca58abec33</UserSecretsId>
         <PackageVersion Condition="'$(Configuration)'=='DebugL'">999.0.0</PackageVersion>
-        <RestoreSources Condition="'$(Configuration)'=='DebugL'">$(MSBuildThisFileDirectory)../nuget</RestoreSources>
+        <RestoreSources Condition="'$(Configuration)'=='DebugL'">$(SolutionDir)../nuget</RestoreSources>
     </PropertyGroup>
 </Project>

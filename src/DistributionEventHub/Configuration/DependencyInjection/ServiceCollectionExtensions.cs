@@ -69,7 +69,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ITenantResolver, DefaultTenantResolver>();
         services.TryAddSingleton<IRepositoryClient, RepositoryClient>();
         services.TryAddSingleton<IDistributionEventHubService, DistributionEventHubService>();
-        services.AddSingleton<IBroadcastServiceAddress>(p => new BroadcastServiceAddress(configuration.UniqueServiceAddress));
+        services.AddSingleton<IBroadcastServiceAddress>(_ => new BroadcastServiceAddress(configuration.UniqueServiceAddress));
         services.AddTransient<IEventHubControl, EventHubControl>();
 
         services.AddMassTransit();
@@ -81,6 +81,11 @@ public static class ServiceCollectionExtensions
 
             x.UsingRabbitMq((context, cfg) =>
             {
+                if (configuration.UsePublishMessageScheduler)
+                {
+                    cfg.UsePublishMessageScheduler();
+                }
+                
                 cfg.UseMessageScheduler(schedulerEndpoint);
                 cfg.ConfigureEndpoints(context);
             });

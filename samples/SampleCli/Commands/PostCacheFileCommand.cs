@@ -20,7 +20,7 @@ public class PostCacheFileCommand : Command<OctoMonitoringOptions>
     {
         _distributedCacheService = distributedCacheService;
 
-        _tenantIdArg = CommandArgumentValue.AddArgument("tid", "tenantId", new[] { "TenantId to use" }, false, 1);
+        _tenantIdArg = CommandArgumentValue.AddArgument("tid", "tenantId", new[] { "TenantId to use" }, true, 1);
         _fileArg = CommandArgumentValue.AddArgument("f", "file", new[] { "File to cache" }, true, 1);
     }
 
@@ -28,19 +28,16 @@ public class PostCacheFileCommand : Command<OctoMonitoringOptions>
     {
         var rtModelFilePath = CommandArgumentValue.GetArgumentScalarValue<string>(_fileArg);
 
-        string? tenantId = null;
-        if (CommandArgumentValue.IsArgumentUsed(_tenantIdArg))
-        {
-            tenantId = CommandArgumentValue.GetArgumentScalarValue<string>(_tenantIdArg);
-        }
+        var tenantId = CommandArgumentValue.GetArgumentScalarValue<string>(_tenantIdArg);
 
         Logger.LogInformation("File cache command executing");
 
         var fileName = Path.GetFileName(rtModelFilePath);
-        var id = await _distributedCacheService.CacheStreamAsync(tenantId, File.OpenRead(rtModelFilePath), "application/octet-stream", fileName);
-        
+        var id = await _distributedCacheService.CacheStreamAsync(tenantId, File.OpenRead(rtModelFilePath), "application/octet-stream",
+            fileName);
+
         Logger.LogInformation("File cached with id {Id}", id);
-    
+
         Logger.LogInformation("See you next time!");
     }
 }
