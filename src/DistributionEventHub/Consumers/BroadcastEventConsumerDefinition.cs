@@ -10,8 +10,9 @@ internal class BroadcastEventConsumerDefinition<TConsumer> : ConsumerDefinition<
     {
         EndpointName = string.Format(CacheCommon.ServiceEndpointPattern, serviceAddress.ServiceName);
     }
-    
-    protected override void ConfigureConsumer(IReceiveEndpointConfigurator endpointConfigurator, IConsumerConfigurator<TConsumer> consumerConfigurator,
+
+    protected override void ConfigureConsumer(IReceiveEndpointConfigurator endpointConfigurator,
+        IConsumerConfigurator<TConsumer> consumerConfigurator,
         IRegistrationContext context)
     {
     }

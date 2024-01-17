@@ -5,7 +5,7 @@ using Meshmakers.Octo.Common.DistributionEventHub.Repository;
 namespace Meshmakers.Octo.Common.DistributionEventHub.Sagas;
 
 /// <summary>
-/// A basic implementation of a saga repository for mass transit
+///     A basic implementation of a saga repository for mass transit
 /// </summary>
 /// <typeparam name="TSaga">Type of saga</typeparam>
 /// <typeparam name="TKey">The key type</typeparam>
@@ -17,7 +17,7 @@ public class DistributionSagaRepository<TKey, TSaga> : ISagaRepository<TSaga>
     private readonly ITenantResolver _tenantResolver;
 
     /// <summary>
-    /// Constructor
+    ///     Constructor
     /// </summary>
     public DistributionSagaRepository(IRepositoryClient repositoryClient, ITenantResolver tenantResolver)
     {

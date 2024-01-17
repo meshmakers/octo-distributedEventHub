@@ -1,7 +1,7 @@
 namespace Meshmakers.Octo.Common.DistributionEventHub;
 
 /// <summary>
-/// Base class for all distribution exceptions
+///     Base class for all distribution exceptions
 /// </summary>
 public abstract class DistributionException : Exception
 {

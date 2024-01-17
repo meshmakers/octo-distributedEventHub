@@ -12,7 +12,7 @@ internal class ConfigureRabbitMqTransportOptions : IConfigureNamedOptions<Rabbit
     {
         _distributionEventHubOptions = distributionEventHubOptions;
     }
-    
+
     public void Configure(RabbitMqTransportOptions options)
     {
         Configure(Microsoft.Extensions.Options.Options.DefaultName, options);

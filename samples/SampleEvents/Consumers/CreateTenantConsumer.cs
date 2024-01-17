@@ -7,7 +7,7 @@ namespace SampleEvents.Consumers;
 public class CreateTenantConsumer :
     IDistributedConsumer<CreateTenant>
 {
-    readonly ILogger<CreateTenantConsumer> _logger;
+    private readonly ILogger<CreateTenantConsumer> _logger;
 
     public CreateTenantConsumer(ILogger<CreateTenantConsumer> logger)
     {

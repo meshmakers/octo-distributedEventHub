@@ -3,7 +3,7 @@ using MassTransit;
 namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 /// <summary>
-/// Represents the event hub control
+///     Represents the event hub control
 /// </summary>
 internal class EventHubControl : IEventHubControl
 {
@@ -13,7 +13,7 @@ internal class EventHubControl : IEventHubControl
     {
         _busControl = busControl;
     }
-    
+
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
         return _busControl.StartAsync(cancellationToken);

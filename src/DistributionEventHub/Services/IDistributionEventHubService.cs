@@ -1,12 +1,12 @@
 namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 /// <summary>
-/// Interface of client to distribute events directly or by broadcast
+///     Interface of client to distribute events directly or by broadcast
 /// </summary>
 public interface IDistributionEventHubService
 {
     /// <summary>
-    /// Publish an event
+    ///     Publish an event
     /// </summary>
     /// <param name="message">Message to publish</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -16,7 +16,7 @@ public interface IDistributionEventHubService
         where T : class;
 
     /// <summary>
-    /// Send an event to a specific address
+    ///     Send an event to a specific address
     /// </summary>
     /// <param name="address">Address to send to</param>
     /// <param name="message">Message to publish</param>

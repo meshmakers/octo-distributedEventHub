@@ -38,5 +38,4 @@ public interface IDownloadStreamHandler : IDisposable
     ///     Closes the GridFS stream.
     /// </summary>
     void Close();
-
 }

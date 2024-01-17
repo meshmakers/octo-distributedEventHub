@@ -7,7 +7,7 @@ namespace SampleEvents.Consumers;
 public class SampleCommandRequestConsumer :
     IDistributedConsumer<SampleCommandRequest>
 {
-    readonly ILogger<SampleCommandRequestConsumer> _logger;
+    private readonly ILogger<SampleCommandRequestConsumer> _logger;
 
     public SampleCommandRequestConsumer(ILogger<SampleCommandRequestConsumer> logger)
     {
@@ -17,7 +17,7 @@ public class SampleCommandRequestConsumer :
     public async Task ConsumeAsync(IDistributedContext<SampleCommandRequest> context)
     {
         _logger.LogInformation("Command request received: {Text}", context.Message.Value);
-        
+
         await Task.Delay(1000);
 
         await context.RespondAsync(new SampleCommandResponse { Value = context.Message.Value + "_Response" });

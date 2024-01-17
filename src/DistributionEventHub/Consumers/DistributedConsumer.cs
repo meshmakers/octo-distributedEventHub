@@ -8,11 +8,11 @@ internal class DistributedConsumer<TConsumer, TMessage> : IConsumer<TMessage>
     where TConsumer : class, IDistributedConsumer<TMessage>
     where TMessage : class
 {
+    private readonly TConsumer _consumer;
     private readonly ILogger<DistributedConsumer<TConsumer, TMessage>> _logger;
     private readonly ILoggerFactory _loggerFactory;
-    private readonly TConsumer _consumer;
 
-    public DistributedConsumer(ILogger<DistributedConsumer<TConsumer, TMessage> > logger, ILoggerFactory loggerFactory, TConsumer consumer)
+    public DistributedConsumer(ILogger<DistributedConsumer<TConsumer, TMessage>> logger, ILoggerFactory loggerFactory, TConsumer consumer)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;

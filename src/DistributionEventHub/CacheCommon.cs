@@ -6,7 +6,7 @@ namespace Meshmakers.Octo.Common.DistributionEventHub;
 internal static class CacheCommon
 {
     internal const string ServiceEndpointPattern = "octo::service::{0}";
-    
+
     internal const string ContentType = "contentType";
     internal const string ExpiryDateTime = "expiryDateTime";
 }

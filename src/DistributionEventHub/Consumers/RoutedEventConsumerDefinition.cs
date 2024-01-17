@@ -6,7 +6,8 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 internal class RoutedEventConsumerDefinition<TConsumer> : ConsumerDefinition<TConsumer>
     where TConsumer : class, IConsumer
 {
-    protected override void ConfigureConsumer(IReceiveEndpointConfigurator endpointConfigurator, IConsumerConfigurator<TConsumer> consumerConfigurator,
+    protected override void ConfigureConsumer(IReceiveEndpointConfigurator endpointConfigurator,
+        IConsumerConfigurator<TConsumer> consumerConfigurator,
         IRegistrationContext context)
     {
     }

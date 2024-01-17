@@ -1,13 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
-  <PropertyGroup>
-    <Configurations>Debug;Release;DebugL</Configurations>
-    <Platforms>AnyCPU</Platforms>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="MassTransit.MongoDb" Version="8.1.3" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\SampleEvents\SampleEvents.csproj" />
-  </ItemGroup>
+    <PropertyGroup>
+        <Configurations>Debug;Release;DebugL</Configurations>
+        <Platforms>AnyCPU</Platforms>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageReference Include="MassTransit.MongoDb" Version="8.1.3"/>
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0"/>
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\SampleEvents\SampleEvents.csproj"/>
+    </ItemGroup>
 </Project>

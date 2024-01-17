@@ -3,7 +3,7 @@ using MassTransit;
 namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 /// <summary>
-/// Implements the <see cref="ICommandClient{TRequest}"/> interface. 
+///     Implements the <see cref="ICommandClient{TRequest}" /> interface.
 /// </summary>
 /// <typeparam name="TRequest"></typeparam>
 internal class CommandClient<TRequest> : ICommandClient<TRequest> where TRequest : class
@@ -11,7 +11,7 @@ internal class CommandClient<TRequest> : ICommandClient<TRequest> where TRequest
     private readonly IRequestClient<TRequest> _requestClient;
 
     /// <summary>
-    /// Configures the request client
+    ///     Configures the request client
     /// </summary>
     /// <param name="requestClient"></param>
     public CommandClient(IRequestClient<TRequest> requestClient)
@@ -19,7 +19,7 @@ internal class CommandClient<TRequest> : ICommandClient<TRequest> where TRequest
         _requestClient = requestClient;
     }
 
-    public async Task<TResponse> GetResponse<TResponse>(TRequest message, CancellationToken cancellationToken = default, 
+    public async Task<TResponse> GetResponse<TResponse>(TRequest message, CancellationToken cancellationToken = default,
         TimeSpan? timeout = default) where TResponse : class
     {
         var requestTimeout = timeout ?? RequestTimeout.Default;

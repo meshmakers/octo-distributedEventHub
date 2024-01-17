@@ -3,7 +3,7 @@ using System.Linq.Expressions;
 namespace Meshmakers.Octo.Common.DistributionEventHub.Repository;
 
 /// <summary>
-/// Interface for repository collections
+///     Interface for repository collections
 /// </summary>
 public interface IRepositoryCollection<TKey, TDocument>
     where TKey : notnull
@@ -16,7 +16,7 @@ public interface IRepositoryCollection<TKey, TDocument>
     Task<TDocument?> FindSingleOrDefaultAsync(
         IRepositorySession session,
         Expression<Func<TDocument, bool>> expression);
-    
+
     /// <summary>Finds a document by the given expression</summary>
     /// <param name="session">The session object</param>
     /// <param name="expression">Filter expression</param>
@@ -28,7 +28,7 @@ public interface IRepositoryCollection<TKey, TDocument>
         Expression<Func<TDocument, bool>> expression,
         int? skip = null,
         int? take = null);
-    
+
     /// <summary>Inserts a new document into the collection</summary>
     /// <param name="session">The session object</param>
     /// <param name="document">The document to insert</param>

@@ -27,7 +27,8 @@ public static class ServiceCollectionExtensions
     /// </param>
     /// <param name="configurationAction">Basic configuration of the distribution event hub.</param>
     /// <returns>
-    ///     The <see cref="T:Microsoft.SagaRegistrationConfiguratorExtensions.DependencyInjection.IServiceCollection" /> so that additional calls can
+    ///     The <see cref="T:Microsoft.SagaRegistrationConfiguratorExtensions.DependencyInjection.IServiceCollection" /> so that additional calls
+    ///     can
     ///     be chained.
     /// </returns>
     public static IServiceCollection AddDistributionEventHubWithOptions(this IServiceCollection services,
@@ -47,7 +48,8 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The current service collection</param>
     /// <param name="configurationAction">Basic configuration of the distribution event hub.</param>
     /// <returns>
-    ///     The <see cref="T:Microsoft.SagaRegistrationConfiguratorExtensions.DependencyInjection.IServiceCollection" /> so that additional calls can
+    ///     The <see cref="T:Microsoft.SagaRegistrationConfiguratorExtensions.DependencyInjection.IServiceCollection" /> so that additional calls
+    ///     can
     ///     be chained.
     /// </returns>
     public static IServiceCollection AddDistributionEventHub(this IServiceCollection services,
@@ -76,7 +78,7 @@ public static class ServiceCollectionExtensions
 
         configuration.ConfigureMassTransit(x =>
         {
-            Uri schedulerEndpoint = new Uri("queue:scheduler");
+            var schedulerEndpoint = new Uri("queue:scheduler");
             x.AddMessageScheduler(schedulerEndpoint);
 
             x.UsingRabbitMq((context, cfg) =>
@@ -85,7 +87,7 @@ public static class ServiceCollectionExtensions
                 {
                     cfg.UsePublishMessageScheduler();
                 }
-                
+
                 cfg.UseMessageScheduler(schedulerEndpoint);
                 cfg.ConfigureEndpoints(context);
             });

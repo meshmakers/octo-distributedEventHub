@@ -7,7 +7,7 @@ namespace SampleEvents.Consumers;
 public class ReloadTenantConsumer :
     IDistributedConsumer<ReloadTenant>
 {
-    readonly ILogger<ReloadTenantConsumer> _logger;
+    private readonly ILogger<ReloadTenantConsumer> _logger;
 
     public ReloadTenantConsumer(ILogger<ReloadTenantConsumer> logger)
     {
