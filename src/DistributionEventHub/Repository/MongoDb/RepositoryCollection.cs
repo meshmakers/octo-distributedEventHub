@@ -27,7 +27,7 @@ internal class RepositoryCollection<TKey, TDocument> : IRepositoryCollection<TKe
         }
     }
 
-    public async Task<ICollection<TDocument>> FindManyAsync(IRepositorySession session, 
+    public async Task<ICollection<TDocument>> FindManyAsync(IRepositorySession session,
         Expression<Func<TDocument, bool>> expression, int? skip = null, int? take = null)
     {
         try
@@ -59,11 +59,13 @@ internal class RepositoryCollection<TKey, TDocument> : IRepositoryCollection<TKe
             throw new DistributedOperationFailedException(e.Message, e);
         }
     }
-    
+
     private void HandleWriteException<T>(MongoWriteException ex)
     {
         if (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
+        {
             throw new DistributedOperationFailedException($"Error adding item of type {nameof(T)}", ex);
+        }
 
         throw new DistributedOperationFailedException("Operation was not completed.", ex);
     }

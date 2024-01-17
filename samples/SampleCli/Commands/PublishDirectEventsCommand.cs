@@ -1,10 +1,8 @@
 using Meshmakers.Common.CommandLineParser.Commands;
-using Meshmakers.Octo.Common.DistributionEventHub;
 using Meshmakers.Octo.Common.DistributionEventHub.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SampleCli.Configuration.Options;
-using SampleEvents.Consumers;
 using SampleEvents.Messages;
 
 namespace SampleCli.Commands;
@@ -23,7 +21,7 @@ public class PublishDirectEventsCommand : Command<OctoMonitoringOptions>
     public override async Task Execute()
     {
         long i = 0;
-        bool run = true;
+        var run = true;
         Logger.LogInformation("Publish command executing");
         Console.CancelKeyPress += (sender, args) =>
         {
@@ -41,6 +39,7 @@ public class PublishDirectEventsCommand : Command<OctoMonitoringOptions>
             await Task.Delay(1000);
             i++;
         }
+
         Logger.LogInformation("See you next time!");
     }
 }

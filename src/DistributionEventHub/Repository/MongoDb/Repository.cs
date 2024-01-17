@@ -6,9 +6,9 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Repository.MongoDb;
 
 internal class Repository : IRepository
 {
-    private readonly IMongoDatabase _mongoDatabase;
     private readonly GridFSBucket _bucket;
     private readonly Dictionary<Type, string> _collectionNameMapping = new();
+    private readonly IMongoDatabase _mongoDatabase;
 
     public Repository(IMongoDatabase mongoDatabase)
     {
@@ -19,10 +19,10 @@ internal class Repository : IRepository
             ReadPreference = ReadPreference.SecondaryPreferred
         });
     }
-    
+
     public IRepositoryCollection<TKey, TDocument> GetCollection<TKey, TDocument>(
-        string? suffix = null) 
-        where TKey : notnull    
+        string? suffix = null)
+        where TKey : notnull
         where TDocument : class, new()
     {
         var name = GetCollectionName<TDocument>(suffix);
@@ -30,7 +30,7 @@ internal class Repository : IRepository
         return new RepositoryCollection<TKey, TDocument>(_mongoDatabase.GetCollection<TDocument>(name));
     }
 
-    public async Task<string> UploadBinaryAsync(Stream stream, string contentType, string fileName, DateTime? expiry, 
+    public async Task<string> UploadBinaryAsync(Stream stream, string contentType, string fileName, DateTime? expiry,
         CancellationToken cancellationToken = default)
     {
         var cacheStreamKey = ObjectId.GenerateNewId();
@@ -65,7 +65,7 @@ internal class Repository : IRepository
     {
         var gridFsDownloadStream =
             await _bucket.OpenDownloadStreamAsync(cacheStreamKey, cancellationToken: cancellationToken).ConfigureAwait(false);
-        
+
         return new DownloadStreamHandler(gridFsDownloadStream);
     }
 
@@ -77,7 +77,10 @@ internal class Repository : IRepository
             _collectionNameMapping.Add(typeof(T), name);
         }
 
-        if (!string.IsNullOrEmpty(suffix)) return name + "_" + suffix;
+        if (!string.IsNullOrEmpty(suffix))
+        {
+            return name + "_" + suffix;
+        }
 
         return name;
     }

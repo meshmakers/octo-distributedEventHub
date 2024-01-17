@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <Configurations>Debug;Release;DebugL</Configurations>
-    <Platforms>AnyCPU</Platforms>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\DistributionEventHub\DistributionEventHub.csproj" />
-  </ItemGroup>
+    <PropertyGroup>
+        <Configurations>Debug;Release;DebugL</Configurations>
+        <Platforms>AnyCPU</Platforms>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\DistributionEventHub\DistributionEventHub.csproj"/>
+    </ItemGroup>
 </Project>

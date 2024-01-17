@@ -1,6 +1,5 @@
 using Meshmakers.Common.CommandLineParser;
 using Meshmakers.Common.CommandLineParser.Commands;
-using Meshmakers.Octo.Common.DistributionEventHub;
 using Meshmakers.Octo.Common.DistributionEventHub.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -10,9 +9,9 @@ namespace SampleCli.Commands;
 
 public class GetCacheFileCommand : Command<OctoMonitoringOptions>
 {
+    private readonly IArgument _cacheKeyArg;
     private readonly IDistributedCacheService _distributedCacheService;
     private readonly IArgument _pathArg;
-    private readonly IArgument _cacheKeyArg;
     private readonly IArgument _tenantIdArg;
 
     public GetCacheFileCommand(ILogger<GetCacheFileCommand> logger,
@@ -44,7 +43,7 @@ public class GetCacheFileCommand : Command<OctoMonitoringOptions>
 
         var filePath = Path.Combine(path, cacheStream.FileName);
         await using var fileStream = File.OpenWrite(filePath);
-        byte[] buffer = new byte[8192]; // Buffer size can be adjusted
+        var buffer = new byte[8192]; // Buffer size can be adjusted
         int bytesRead;
 
         // Read from the input stream in chunks and write to the file stream
@@ -52,9 +51,9 @@ public class GetCacheFileCommand : Command<OctoMonitoringOptions>
         {
             fileStream.Write(buffer, 0, bytesRead);
         }
-        
+
         Logger.LogInformation("File stored at '{FilePath}'", filePath);
-    
+
         Logger.LogInformation("See you next time!");
     }
 }

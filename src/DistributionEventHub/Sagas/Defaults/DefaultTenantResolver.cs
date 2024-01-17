@@ -3,17 +3,17 @@ using MassTransit;
 namespace Meshmakers.Octo.Common.DistributionEventHub.Sagas.Defaults;
 
 /// <summary>
-/// Default tenant resolver
+///     Default tenant resolver
 /// </summary>
 public class DefaultTenantResolver : ITenantResolver
 {
     /// <summary>
-    /// Constructor
+    ///     Constructor
     /// </summary>
     public DefaultTenantResolver()
     {
     }
-    
+
     /// <inheritdoc />
     public Task<string> GetRepositoryNameAsync(ConsumeContext consumeContext)
     {

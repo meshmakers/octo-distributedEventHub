@@ -7,7 +7,7 @@ namespace SampleEvents.Consumers;
 public class BroadcastTestConsumer :
     IDistributedConsumer<BroadcastTest>
 {
-    readonly ILogger<BroadcastTestConsumer> _logger;
+    private readonly ILogger<BroadcastTestConsumer> _logger;
 
     public BroadcastTestConsumer(ILogger<BroadcastTestConsumer> logger)
     {

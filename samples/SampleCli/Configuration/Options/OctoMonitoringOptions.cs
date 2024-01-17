@@ -1,7 +1,7 @@
 namespace SampleCli.Configuration.Options;
 
 /// <summary>
-/// Options of the octo monitoring
+///     Options of the octo monitoring
 /// </summary>
 public class OctoMonitoringOptions
 {
@@ -18,12 +18,12 @@ public class OctoMonitoringOptions
         RepositoryPassword = "OctoAdmin1";
         RepositoryUseTls = false;
     }
-    
+
     /// <summary>
     ///     Gets or sets the message broker host name
     /// </summary>
     public string MessageBrokerHost { get; set; }
-    
+
     /// <summary>
     ///     Gets or sets the message broker user
     /// </summary>
@@ -35,27 +35,27 @@ public class OctoMonitoringOptions
     public string MessageBrokerPassword { get; set; }
 
     /// <summary>
-    /// Gets or sets the repository host name
+    ///     Gets or sets the repository host name
     /// </summary>
     public string RepositoryHost { get; set; }
-    
+
     /// <summary>
-    /// Gets or sets the repository user
+    ///     Gets or sets the repository user
     /// </summary>
     public string RepositoryUser { get; set; }
-    
+
     /// <summary>
-    /// Gets or sets the repository password
+    ///     Gets or sets the repository password
     /// </summary>
     public string RepositoryPassword { get; set; }
 
     /// <summary>
-    /// Gets or sets whether to use TLS for repository connection
+    ///     Gets or sets whether to use TLS for repository connection
     /// </summary>
     public bool RepositoryUseTls { get; set; }
 
     /// <summary>
-    /// Gets or sets whether to allow insecure TLS for repository connection
+    ///     Gets or sets whether to allow insecure TLS for repository connection
     /// </summary>
     public bool RepositoryAllowInsecureTls { get; set; }
 }

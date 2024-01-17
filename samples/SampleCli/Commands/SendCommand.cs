@@ -1,6 +1,5 @@
 using System.Globalization;
 using Meshmakers.Common.CommandLineParser.Commands;
-using Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 using Meshmakers.Octo.Common.DistributionEventHub.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;

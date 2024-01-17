@@ -15,7 +15,6 @@ using SampleCli;
 using SampleCli.Commands;
 using SampleCli.Configuration;
 using SampleCli.Configuration.Options;
-using SampleEvents.Consumers;
 using SampleEvents.Messages;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
@@ -23,7 +22,7 @@ static IServiceProvider BuildDi()
 {
     var services = new ServiceCollection();
 
-    
+
     services.AddSingleton<IConsoleService, ConsoleService>();
     services.AddSingleton<IEnvironmentService, EnvironmentService>();
     services.AddSingleton<IParserService, ParserService>();
@@ -38,7 +37,7 @@ static IServiceProvider BuildDi()
     services.AddDistributionEventHub(c =>
     {
         c.UniqueServiceAddress = "OctoDistributionEventHubMonitorCli";
-        
+
         c.AddCommandClient<SampleCommandRequest>("SampleCommandRequest");
     });
 
@@ -70,7 +69,7 @@ static IServiceProvider BuildDi()
         loggingBuilder.SetMinimumLevel(LogLevel.Trace);
         loggingBuilder.AddNLog(config);
     });
-    
+
     var serviceProvider = services.BuildServiceProvider();
     return serviceProvider;
 }
@@ -84,7 +83,7 @@ try
     {
         eventHubControl = serviceProvider.GetRequiredService<IEventHubControl>();
         await eventHubControl.StartAsync();
-        
+
         var runner = serviceProvider.GetRequiredService<Runner>();
         return await runner.DoActionAsync();
     }

@@ -1,19 +1,19 @@
 namespace Meshmakers.Octo.Common.DistributionEventHub;
 
 /// <summary>
-/// Distributed operation failed exception
+///     Distributed operation failed exception
 /// </summary>
 public class DistributedOperationFailedException : DistributionException
 {
     /// <summary>
-    /// Constructor
+    ///     Constructor
     /// </summary>
     public DistributedOperationFailedException()
     {
     }
 
     /// <summary>
-    /// Constructor
+    ///     Constructor
     /// </summary>
     /// <param name="message">Exception message</param>
     public DistributedOperationFailedException(string message) : base(message)
@@ -21,14 +21,14 @@ public class DistributedOperationFailedException : DistributionException
     }
 
     /// <summary>
-    /// Constructor
+    ///     Constructor
     /// </summary>
     /// <param name="message">Exception message</param>
     /// <param name="inner">Inner exception</param>
     public DistributedOperationFailedException(string message, Exception inner) : base(message, inner)
     {
     }
-    
+
     internal static DistributedOperationFailedException CreateCommandFailed(string commandName, Exception inner)
     {
         return new DistributedOperationFailedException(

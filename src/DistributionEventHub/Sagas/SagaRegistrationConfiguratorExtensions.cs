@@ -9,7 +9,7 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Sagas;
 internal static class SagaRegistrationConfiguratorExtensions
 {
     /// <summary>
-    /// Adds an in-memory saga repository to the registration
+    ///     Adds an in-memory saga repository to the registration
     /// </summary>
     /// <param name="configurator"></param>
     /// <typeparam name="T"></typeparam>
@@ -21,9 +21,9 @@ internal static class SagaRegistrationConfiguratorExtensions
 
         return configurator;
     }
-    
+
     /// <summary>
-    /// Register the InMemory saga repository for the specified saga type
+    ///     Register the InMemory saga repository for the specified saga type
     /// </summary>
     /// <param name="collection"></param>
     /// <typeparam name="T"></typeparam>
@@ -33,6 +33,8 @@ internal static class SagaRegistrationConfiguratorExtensions
         collection.TryAddSingleton(new IndexedSagaDictionary<T>());
         collection.RegisterLoadSagaRepository<T, InMemorySagaRepositoryContextFactory<T>>();
         collection.RegisterQuerySagaRepository<T, InMemorySagaRepositoryContextFactory<T>>();
-        collection.RegisterSagaRepository<T, IndexedSagaDictionary<T>, InMemorySagaConsumeContextFactory<T>, InMemorySagaRepositoryContextFactory<T>>();
+        collection
+            .RegisterSagaRepository<T, IndexedSagaDictionary<T>, InMemorySagaConsumeContextFactory<T>,
+                InMemorySagaRepositoryContextFactory<T>>();
     }
 }

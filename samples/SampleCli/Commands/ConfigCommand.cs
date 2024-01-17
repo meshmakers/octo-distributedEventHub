@@ -11,13 +11,13 @@ internal class ConfigOctoCommand : Command<OctoMonitoringOptions>
 {
     private readonly IConfigWriter _configWriter;
     private readonly IArgument _messageBrokerHost;
-    private readonly IArgument _messageBrokerUser;
     private readonly IArgument _messageBrokerPassword;
-    private readonly IArgument _repositoryHost;
-    private readonly IArgument _repositoryUser;
-    private readonly IArgument _repositoryPassword;
-    private readonly IArgument _repositoryUseTls;
+    private readonly IArgument _messageBrokerUser;
     private readonly IArgument _repositoryAllowInsecureTls;
+    private readonly IArgument _repositoryHost;
+    private readonly IArgument _repositoryPassword;
+    private readonly IArgument _repositoryUser;
+    private readonly IArgument _repositoryUseTls;
 
     public ConfigOctoCommand(ILogger<ConfigOctoCommand> logger, IOptions<OctoMonitoringOptions> options,
         IConfigWriter configWriter)
@@ -57,7 +57,7 @@ internal class ConfigOctoCommand : Command<OctoMonitoringOptions>
 
         Options.Value.MessageBrokerPassword =
             CommandArgumentValue.GetArgumentScalarValue<string>(_messageBrokerPassword).ToLower();
-        
+
         Options.Value.RepositoryHost =
             CommandArgumentValue.GetArgumentScalarValue<string>(_repositoryHost).ToLower();
 
@@ -71,7 +71,7 @@ internal class ConfigOctoCommand : Command<OctoMonitoringOptions>
         {
             Options.Value.RepositoryUseTls = CommandArgumentValue.GetArgumentScalarValue<bool>(_repositoryUseTls);
         }
-        
+
         if (CommandArgumentValue.IsArgumentUsed(_repositoryAllowInsecureTls))
         {
             Options.Value.RepositoryAllowInsecureTls = CommandArgumentValue.GetArgumentScalarValue<bool>(_repositoryAllowInsecureTls);

@@ -14,9 +14,9 @@ public record CacheStream
     ///     The stream as byte array
     /// </summary>
     public Stream Stream { get; init; } = null!;
-    
+
     /// <summary>
-    /// The original file name
+    ///     The original file name
     /// </summary>
     public string FileName { get; init; } = string.Empty;
 }

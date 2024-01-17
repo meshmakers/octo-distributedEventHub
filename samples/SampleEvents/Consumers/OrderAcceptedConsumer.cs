@@ -7,7 +7,7 @@ namespace SampleEvents.Consumers;
 public class OrderAcceptedConsumer :
     IDistributedConsumer<OrderAccepted>
 {
-    readonly ILogger<OrderAcceptedConsumer> _logger;
+    private readonly ILogger<OrderAcceptedConsumer> _logger;
 
     public OrderAcceptedConsumer(ILogger<OrderAcceptedConsumer> logger)
     {

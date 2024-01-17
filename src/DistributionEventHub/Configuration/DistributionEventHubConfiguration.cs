@@ -7,12 +7,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 
 /// <summary>
-/// Basic configuration of the distribution event hub.
+///     Basic configuration of the distribution event hub.
 /// </summary>
 internal class DistributionEventHubConfiguration : IDistributionEventHubConfiguration
 {
-    private readonly IServiceCollection _serviceCollection;
     private readonly ServiceCollectionBusConfigurator _busConfigurator;
+    private readonly IServiceCollection _serviceCollection;
 
     public DistributionEventHubConfiguration(IServiceCollection serviceCollection)
     {
@@ -21,14 +21,14 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
     }
 
     /// <summary>
-    /// Gets or sets the unique service name.
+    ///     Use the publish message scheduler to schedule messages using the Hangfire scheduler
+    /// </summary>
+    public bool UsePublishMessageScheduler { get; private set; }
+
+    /// <summary>
+    ///     Gets or sets the unique service name.
     /// </summary>
     public string UniqueServiceAddress { get; set; } = string.Empty;
-    
-    /// <summary>
-    /// Use the publish message scheduler to schedule messages using the Hangfire scheduler
-    /// </summary>
-    public bool UsePublishMessageScheduler { get; private set; } 
 
     public void AddCommandClient<TRequest>(string commandName, TimeSpan? timeout = default)
         where TRequest : class
@@ -82,7 +82,7 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
     public void AddHangfireMessageScheduler()
     {
         UsePublishMessageScheduler = true;
-        
+
         _busConfigurator.AddPublishMessageScheduler();
 
         _busConfigurator.AddHangfireConsumers();
