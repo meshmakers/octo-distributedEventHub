@@ -35,7 +35,7 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
     {
         var requestTimeout = timeout ?? RequestTimeout.Default;
         _busConfigurator.AddRequestClient<TRequest>(new Uri($"queue:{commandName}?temporary=true"), requestTimeout);
-        _serviceCollection.AddScoped<ICommandClient<TRequest>, CommandClient<TRequest>>();
+        _serviceCollection.AddSingleton<ICommandClient<TRequest>, CommandClient<TRequest>>();
     }
 
     public void AddCommandConsumer<TConsumer, TMessage>(string commandName)
@@ -49,7 +49,7 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
                 c.Temporary = true;
                 c.ConfigureConsumeTopology = false;
             });
-        _serviceCollection.AddScoped<TConsumer>();
+        _serviceCollection.AddSingleton<TConsumer>();
     }
 
     public void AddBroadcastEventConsumer<TConsumer, TMessage>()
@@ -59,7 +59,7 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
         _busConfigurator
             .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
                 BroadcastEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>();
-        _serviceCollection.AddScoped<TConsumer>();
+        _serviceCollection.AddSingleton<TConsumer>();
     }
 
     public void AddRoutedEventConsumer<TConsumer, TMessage>()
@@ -69,7 +69,7 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
         _busConfigurator
             .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
                 RoutedEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>();
-        _serviceCollection.AddScoped<TConsumer>();
+        _serviceCollection.AddSingleton<TConsumer>();
     }
 
     public ISagaRegistrationConfigurator<T>
