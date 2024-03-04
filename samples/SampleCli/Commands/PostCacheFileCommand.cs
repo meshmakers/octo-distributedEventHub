@@ -32,7 +32,7 @@ public class PostCacheFileCommand : Command<OctoMonitoringOptions>
         Logger.LogInformation("File cache command executing");
 
         var fileName = Path.GetFileName(rtModelFilePath);
-        var id = await _distributedCacheService.CacheStreamAsync(tenantId, File.OpenRead(rtModelFilePath), "application/octet-stream",
+        var id = await _distributedCacheService.CreateStreamAsync(tenantId, File.OpenRead(rtModelFilePath), "application/octet-stream",
             fileName);
 
         Logger.LogInformation("File cached with id {Id}", id);
