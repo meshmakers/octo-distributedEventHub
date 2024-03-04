@@ -1,3 +1,5 @@
+using MongoDB.Bson;
+
 namespace Meshmakers.Octo.Common.DistributionEventHub.Repository;
 
 /// <summary>
@@ -28,6 +30,17 @@ public interface IRepository
     /// <returns>The cache stream key</returns>
     Task<string> UploadBinaryAsync(Stream stream, string contentType, string fileName, DateTime? expiry,
         CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    ///     Uploads a binary to the repository
+    /// </summary>
+    /// <param name="stream">The file stream</param>
+    /// <param name="contentType">Content type of the file</param>
+    /// <param name="fileName">The original file name</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>The cache stream key</returns>
+    Task<string> UploadWithReplaceByFileNameBinaryAsync(Stream stream, string contentType, string fileName,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Deletes a binary from the repository
@@ -38,18 +51,26 @@ public interface IRepository
     Task DeleteBinaryAsync(string cacheStreamKey, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Gets a binary from the repository
+    ///     Gets a binary from the repository using the id
     /// </summary>
     /// <param name="cacheStreamKey">The key identifying the stream</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>if the binary is not found, NULL is returned</returns>
-    Task<IDownloadInfo?> GetBinaryAsync(string cacheStreamKey, CancellationToken cancellationToken = default);
+    Task<IDownloadInfo?> GetBinaryByIdAsync(string cacheStreamKey, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets a binary from the repository using the file name
+    /// </summary>
+    /// <param name="fileName"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    Task<IDownloadInfo?> GetBinaryByFileNameAsync(string fileName, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Downloads a binary from the repository
     /// </summary>
-    /// <param name="cacheStreamKey">The key identifying the stream</param>
+    /// <param name="id">The id of the stream</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>if the binary is not found, NULL is returned</returns>
-    Task<IDownloadStreamHandler?> DownloadBinaryAsync(string cacheStreamKey, CancellationToken cancellationToken = default);
+    Task<IDownloadStreamHandler?> DownloadBinaryAsync(ObjectId id, CancellationToken cancellationToken = default);
 }

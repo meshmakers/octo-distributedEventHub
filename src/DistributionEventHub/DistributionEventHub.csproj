@@ -23,9 +23,9 @@
         <PackageReference Include="MassTransit.RabbitMQ" Version="8.1.3" />
         <PackageReference Include="MassTransit.Hangfire" Version="8.1.3" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
-        <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.1" />
-        <PackageReference Include="MongoDB.Driver" Version="2.23.1" />
-        <PackageReference Include="MongoDB.Driver.GridFS" Version="2.23.1" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="8.0.2" />
+        <PackageReference Include="MongoDB.Driver" Version="2.24.0" />
+        <PackageReference Include="MongoDB.Driver.GridFS" Version="2.24.0" />
     </ItemGroup>
 
     <ItemGroup>

@@ -21,7 +21,17 @@ public interface IDistributedCacheService
     /// <param name="fileName">Original file name</param>
     /// <param name="expiry">The amount of time the stream gets cached</param>
     /// <returns>The key identifying the stream</returns>
-    Task<string> CacheStreamAsync(string tenantId, Stream stream, string contentType, string fileName, TimeSpan? expiry = null);
+    Task<string> CreateStreamAsync(string tenantId, Stream stream, string contentType, string fileName, TimeSpan? expiry = null);
+    
+    /// <summary>
+    ///     Caches a stream and updates it if it already exists. The stream is cached indefinitely
+    /// </summary>
+    /// <param name="tenantId">The tenant id</param>
+    /// <param name="stream">The file stream</param>
+    /// <param name="contentType">Content type of the file</param>
+    /// <param name="fileName">Original file name</param>
+    /// <returns>The key identifying the stream</returns>
+    Task<string> CreateOrUpdateStreamAsync(string tenantId, Stream stream, string contentType, string fileName);
 
     /// <summary>
     ///     Deletes a cached stream
@@ -32,10 +42,18 @@ public interface IDistributedCacheService
     Task DeleteCacheStreamAsync(string tenantId, string cacheStreamKey);
 
     /// <summary>
-    ///     Retrieves a cached stream
+    ///     Retrieves a cached stream by id of the stream
     /// </summary>
     /// <param name="tenantId">The tenant id</param>
     /// <param name="cacheStreamKey">The key identifying the stream</param>
     /// <returns></returns>
-    Task<CacheStream?> GetCacheStreamAsync(string tenantId, string cacheStreamKey);
+    Task<CacheStream?> GetCacheStreamByIdAsync(string tenantId, string cacheStreamKey);
+
+    /// <summary>
+    /// Retrieves a cached stream by file name
+    /// </summary>
+    /// <param name="tenantId"></param>
+    /// <param name="fileName"></param>
+    /// <returns></returns>
+    Task<CacheStream?> GetCacheStreamByFileNameAsync(string tenantId, string fileName);
 }

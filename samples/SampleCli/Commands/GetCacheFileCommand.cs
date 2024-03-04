@@ -34,7 +34,7 @@ public class GetCacheFileCommand : Command<OctoMonitoringOptions>
 
         Logger.LogInformation("Get file cache command executing");
 
-        var cacheStream = await _distributedCacheService.GetCacheStreamAsync(tenantId, id);
+        var cacheStream = await _distributedCacheService.GetCacheStreamByIdAsync(tenantId, id);
         if (cacheStream == null)
         {
             Logger.LogError("No file cached with id {Id}", id);
