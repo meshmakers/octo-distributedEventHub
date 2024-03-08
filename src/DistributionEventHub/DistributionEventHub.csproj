@@ -11,15 +11,8 @@
         <DocumentationFile>..\..\bin\$(Configuration)\$(AssemblyName).xml</DocumentationFile>
     </PropertyGroup>
 
-    <ItemGroup Condition="'$(Configuration)'!='DebugL'">
-        <PackageReference Include="Meshmakers.Common.Shared" Version="4.0.2401.17001" />
-    </ItemGroup>
-
-    <ItemGroup Condition="'$(Configuration)'=='DebugL'">
-        <PackageReference Include="Meshmakers.Common.Shared" Version="999.0.0" />
-    </ItemGroup>
-    
     <ItemGroup>
+        <PackageReference Include="Meshmakers.Common.Shared" Version="$(MeshmakerVersion)" />
         <PackageReference Include="MassTransit.RabbitMQ" Version="8.1.3" />
         <PackageReference Include="MassTransit.Hangfire" Version="8.1.3" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
