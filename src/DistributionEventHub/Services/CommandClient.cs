@@ -53,7 +53,7 @@ internal class CommandClient<TRequest> : ICommandClient<TRequest> where TRequest
             {
                 return await GetResponse<TResponse>(message, cancellationToken, timeout).ConfigureAwait(false);
             }
-            catch (RequestTimeoutException)
+            catch (DistributionTimeoutException)
             {
                 _logger.LogWarning("Request timeout for {RequestType}. Retrying {Retry} of {RetryCount} times",
                     typeof(TRequest).Name, i, retryCount);
