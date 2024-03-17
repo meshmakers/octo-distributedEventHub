@@ -78,7 +78,7 @@ public static class ServiceCollectionExtensions
 
         configuration.ConfigureMassTransit(x =>
         {
-            var schedulerEndpoint = new Uri("queue:scheduler");
+            var schedulerEndpoint = new Uri(configuration.SchedulerEndpointAddress);
             x.AddMessageScheduler(schedulerEndpoint);
 
             x.UsingRabbitMq((context, cfg) =>
