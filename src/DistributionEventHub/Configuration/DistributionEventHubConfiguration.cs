@@ -21,9 +21,14 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
     }
 
     /// <summary>
-    ///     Use the publish message scheduler to schedule messages using the Hangfire scheduler
+    ///     Use the publishing message scheduler to schedule messages using the Hangfire scheduler
     /// </summary>
     public bool UsePublishMessageScheduler { get; private set; }
+    
+    /// <summary>
+    /// Defines the endpoint address for the scheduler
+    /// </summary>
+    public string SchedulerEndpointAddress { get; set; } = "queue:scheduler";
 
     /// <summary>
     ///     Gets or sets the unique service name.

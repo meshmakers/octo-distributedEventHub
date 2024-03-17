@@ -24,4 +24,22 @@ public interface IDistributionEventHubService
     /// <typeparam name="T">Type of message</typeparam>
     /// <returns></returns>
     Task<Task> SendAsync<T>(Uri address, T message, CancellationToken? cancellationToken = null) where T : class;
+
+    /// <summary>
+    ///     Schedule a recurring send
+    /// </summary>
+    /// <param name="message">Message to send</param>
+    /// <param name="destinationQueueAddress">The destination address where the schedule message should be sent</param>
+    /// <param name="recurringSchedulingOptions">Options to describe the recurring schedule</param>
+    /// <typeparam name="T">Type of message</typeparam>
+    /// <returns></returns>
+    Task ScheduleRecurringSendAsync<T>(T message, string destinationQueueAddress, RecurringSchedulingOptions recurringSchedulingOptions) where T : class;
+
+    /// <summary>
+    ///     Cancel a scheduled recurring send
+    /// </summary>
+    /// <param name="scheduleId">Unique identifier of the schedule</param>
+    /// <param name="scheduleGroup">Group of the schedule</param>
+    /// <returns></returns>
+    Task CancelScheduledRecurringSendAsync(string scheduleId, string scheduleGroup);
 }
