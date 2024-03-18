@@ -56,7 +56,7 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
             });
         _serviceCollection.AddScoped<TConsumer>();
     }
-
+    
     public void AddBroadcastEventConsumer<TConsumer, TMessage>()
         where TConsumer : class, IDistributedConsumer<TMessage>
         where TMessage : class
@@ -66,6 +66,22 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
                 BroadcastEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>();
         _serviceCollection.AddScoped<TConsumer>();
     }
+    
+    public void AddRoutedEventConsumer<TConsumer, TMessage>(string destinationAddress)
+        where TConsumer : class, IDistributedConsumer<TMessage>
+        where TMessage : class
+    {
+        EndpointConvention.Map<TMessage>(new Uri($"queue:{destinationAddress}"));
+        _busConfigurator
+            .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
+                RoutedEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>()
+            .Endpoint(c =>
+            {
+                c.Name = destinationAddress;
+            });
+        _serviceCollection.AddScoped<TConsumer>();
+    }
+
 
     public void AddRoutedEventConsumer<TConsumer, TMessage>()
         where TConsumer : class, IDistributedConsumer<TMessage>

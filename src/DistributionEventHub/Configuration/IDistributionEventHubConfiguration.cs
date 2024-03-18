@@ -42,6 +42,17 @@ public interface IDistributionEventHubConfiguration
     void AddBroadcastEventConsumer<TConsumer, TMessage>()
         where TConsumer : class, IDistributedConsumer<TMessage>
         where TMessage : class;
+    
+    /// <summary>
+    ///     Adds a direct message consumer to the DI container, by providing the service name and the consumer type.
+    ///     Direct messages are received by one instance of a service.
+    /// </summary>
+    /// <param name="destinationAddress">destination address of the message</param>
+    /// <typeparam name="TConsumer">The consumer type class</typeparam>
+    /// <typeparam name="TMessage">Type of incoming message</typeparam>
+    void AddRoutedEventConsumer<TConsumer, TMessage>(string destinationAddress)
+        where TConsumer : class, IDistributedConsumer<TMessage>
+        where TMessage : class;
 
     /// <summary>
     ///     Adds a direct message consumer to the DI container, by providing the service name and the consumer type.
