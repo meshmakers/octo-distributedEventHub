@@ -75,6 +75,10 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IEventHubControl, EventHubControl>();
 
         services.AddMassTransit();
+        if (!configuration.AutomaticallyStartBusDuringStartup)
+        {
+            services.RemoveMassTransitHostedService();
+        }
 
         configuration.ConfigureMassTransit(x =>
         {

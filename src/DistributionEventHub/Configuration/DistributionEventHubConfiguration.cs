@@ -34,6 +34,14 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
     ///     Gets or sets the unique service name.
     /// </summary>
     public string UniqueServiceAddress { get; set; } = string.Empty;
+    
+    /// <summary>
+    ///     Gets or sets a value indicating whether the bus should be automatically started during startup.
+    /// </summary>
+    /// <remarks>
+    /// The bus can be started or stopped using the <see cref="IEventHubControl"/> service in manual mode.
+    /// </remarks>
+    public bool AutomaticallyStartBusDuringStartup { get; set; } = true;
 
     public void AddCommandClient<TRequest>(string commandName, TimeSpan? timeout = default)
         where TRequest : class

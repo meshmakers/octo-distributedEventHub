@@ -21,6 +21,7 @@ internal class ConfigureRabbitMqTransportOptions : IConfigureNamedOptions<Rabbit
     public void Configure(string? name, RabbitMqTransportOptions options)
     {
         options.Host = _distributionEventHubOptions.Value.BrokerHost;
+        options.Port = _distributionEventHubOptions.Value.BrokerPort;
         options.User = _distributionEventHubOptions.Value.BrokerUser;
         options.Pass = _distributionEventHubOptions.Value.BrokerPassword;
     }

@@ -1,5 +1,6 @@
 using MassTransit;
 using Meshmakers.Octo.Common.DistributionEventHub.Consumers;
+using Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 
@@ -9,9 +10,22 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 public interface IDistributionEventHubConfiguration
 {
     /// <summary>
+    /// Defines the endpoint address for the scheduler
+    /// </summary>
+    public string SchedulerEndpointAddress { get; set; }
+    
+    /// <summary>
     ///     Gets or sets the unique service address of this type of service
     /// </summary>
     string UniqueServiceAddress { get; set; }
+    
+    /// <summary>
+    ///     Gets or sets a value indicating whether the bus should be automatically started during startup.
+    /// </summary>
+    /// <remarks>
+    /// The bus can be started or stopped using the <see cref="IEventHubControl"/> service in manual mode.
+    /// </remarks>
+    bool AutomaticallyStartBusDuringStartup { get; set; }
 
     /// <summary>
     ///     Adds a bidirectional command to the DI container, by providing the command name and the
