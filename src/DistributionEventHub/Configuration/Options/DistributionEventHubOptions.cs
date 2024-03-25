@@ -11,6 +11,7 @@ public class DistributionEventHubOptions
     public DistributionEventHubOptions()
     {
         BrokerHost = "localhost";
+        BrokerPort = 5672;
         RepositoryHost = "localhost";
         SystemDatabaseName = "OctoSystem";
         RepositoryUser = "octo-system-admin";
@@ -22,6 +23,10 @@ public class DistributionEventHubOptions
     /// </summary>
     public string BrokerHost { get; set; }
 
+    /// <summary>
+    ///     The port of the message broker
+    /// </summary>
+    public ushort BrokerPort { get; set; }
 
     /// <summary>
     ///     The password to connect to message broker

@@ -11,6 +11,7 @@ public class OctoMonitoringOptions
     public OctoMonitoringOptions()
     {
         MessageBrokerHost = "localhost";
+        MessageBrokerPort = 5672;
         MessageBrokerUser = "guest";
         MessageBrokerPassword = "guest";
         RepositoryHost = "localhost:27017";
@@ -23,6 +24,11 @@ public class OctoMonitoringOptions
     ///     Gets or sets the message broker host name
     /// </summary>
     public string MessageBrokerHost { get; set; }
+    
+    /// <summary>
+    ///     Gets or sets the message broker port
+    /// </summary>
+    public ushort MessageBrokerPort { get; set; }
 
     /// <summary>
     ///     Gets or sets the message broker user

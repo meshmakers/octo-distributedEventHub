@@ -21,6 +21,7 @@ internal class ConfigureDistributionEventHubOptions : IConfigureNamedOptions<Dis
     public void Configure(string? name, DistributionEventHubOptions options)
     {
         options.BrokerHost = _octoMonitoringOptions.Value.MessageBrokerHost;
+        options.BrokerPort = _octoMonitoringOptions.Value.MessageBrokerPort;
         options.BrokerUser = _octoMonitoringOptions.Value.MessageBrokerUser;
         options.BrokerPassword = _octoMonitoringOptions.Value.MessageBrokerPassword;
         options.RepositoryHost = _octoMonitoringOptions.Value.RepositoryHost;
