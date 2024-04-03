@@ -16,7 +16,9 @@ public record RecurringSchedulingOptions
     /// <param name="description">Schedule description</param>
     /// <param name="misfirePolicy">If the scheduler is offline and comes back online, the policy determines how
     /// a missed scheduled message is handled.</param>
-    public RecurringSchedulingOptions(string cronExpression, DateTime startTime, DateTime? endTime, string scheduleId, string scheduleGroup, string description, SchedulingMissedEventPolicy misfirePolicy = SchedulingMissedEventPolicy.Default)
+    public RecurringSchedulingOptions(string cronExpression, DateTime startTime, DateTime? endTime, string scheduleId,
+        string scheduleGroup, string description,
+        SchedulingMissedEventPolicy misfirePolicy = SchedulingMissedEventPolicy.Default)
     {
         CronExpression = cronExpression;
         StartTime = startTime;
@@ -26,7 +28,7 @@ public record RecurringSchedulingOptions
         Description = description;
         MisfirePolicy = misfirePolicy;
     }
-    
+
     /// <summary>
     /// Represents options for recurring schedules
     /// </summary>
@@ -36,7 +38,8 @@ public record RecurringSchedulingOptions
     /// <param name="description">Schedule description</param>
     /// <param name="misfirePolicy">If the scheduler is offline and comes back online, the policy determines how
     /// a missed scheduled message is handled.</param>
-    public RecurringSchedulingOptions(string cronExpression, string scheduleId, string scheduleGroup, string description, SchedulingMissedEventPolicy misfirePolicy = SchedulingMissedEventPolicy.Default)
+    public RecurringSchedulingOptions(string cronExpression, string scheduleId, string scheduleGroup,
+        string description, SchedulingMissedEventPolicy misfirePolicy = SchedulingMissedEventPolicy.Default)
     {
         CronExpression = cronExpression;
         StartTime = DateTime.Now;
@@ -49,37 +52,91 @@ public record RecurringSchedulingOptions
     /// <summary>
     /// The Cron Schedule Expression in Cron Syntax
     /// </summary>
-    public string CronExpression { get; init; }
+    public string CronExpression
+    {
+        get;
+#if !NETSTANDARD2_0
+        init;
+#else
+        set;
+#endif
+    }
 
     /// <summary>
     /// The time the recurring schedule is enabled
     /// </summary>
-    public DateTime StartTime { get; init; }
-    
+    public DateTime StartTime
+    {
+        get;
+#if !NETSTANDARD2_0
+        init;
+#else
+        set;
+#endif
+    }
+
     /// <summary>
     /// The time the recurring schedule is disabled
     /// If null then the job is repeated forever
     /// </summary>
-    public DateTime? EndTime { get; init; }
+    public DateTime? EndTime 
+    {
+        get;
+#if !NETSTANDARD2_0
+        init;
+#else
+        set;
+#endif
+    } 
 
     /// <summary>
     /// A unique name that identifies this schedule. 
     /// </summary>
-    public string ScheduleId { get; init; }
+    public string ScheduleId 
+    {
+        get;
+#if !NETSTANDARD2_0
+        init;
+#else
+        set;
+#endif
+    }
 
     /// <summary>
     /// Description of the schedule
     /// </summary>
-    public string ScheduleGroup { get; init; }
-
+    public string ScheduleGroup    
+    {
+        get;
+#if !NETSTANDARD2_0
+        init;
+#else
+        set;
+#endif
+    }
     /// <summary>
     /// Description of the schedule
     /// </summary>
-    public string Description { get; init; }
-
+    public string Description     
+    {
+        get;
+#if !NETSTANDARD2_0
+        init;
+#else
+        set;
+#endif
+    }
     /// <summary>
     /// If the scheduler is offline and comes back online, the policy determines how
     /// a missed scheduled message is handled.
     /// </summary>
-    public SchedulingMissedEventPolicy MisfirePolicy { get; init; }
+    public SchedulingMissedEventPolicy MisfirePolicy 
+    {
+        get;
+#if !NETSTANDARD2_0
+        init;
+#else
+        set;
+#endif
+    }
 }

@@ -25,10 +25,9 @@ public class RepositoryClient : IRepositoryClient
 
         var urlBuilder = new MongoUrlBuilder();
 
-        if (_options.RepositoryHost.Contains(","))
+        if (_options.RepositoryHost.Contains(','))
         {
-            urlBuilder.Servers =
-                _options.RepositoryHost.Split(",").Select(x => new MongoServerAddress(x));
+            urlBuilder.Servers = _options.RepositoryHost.Split(',').Select(x => new MongoServerAddress(x));
         }
         else
         {
