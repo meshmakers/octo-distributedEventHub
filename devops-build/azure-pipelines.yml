@@ -1,4 +1,4 @@
-name: $(MajorVersion).$(MinorVersion).$(date:yyMM).$(DayOfMonth)$(rev:rrr)-$(Build.SourceBranchName)
+name: $(MajorVersion).$(MinorVersion).$(date:yyyyMM).$(DayOfMonth)$(rev:rrr)-$(Build.SourceBranchName)
 
 trigger:
   batch: true
@@ -14,7 +14,7 @@ variables:
   buildConfiguration: 'Release'
   isRelease: $[startsWith(variables['Build.SourceBranch'], 'refs/tags/r')]
   MajorVersion: 0
-  MinorVersion: 0
+  MinorVersion: 1
 
 stages:
  - stage: Build
