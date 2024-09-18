@@ -14,7 +14,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Meshmakers.Common.Shared" Version="$(MeshmakerVersion)" />
+        <PackageReference Include="Meshmakers.Common.Shared" Version="4.0.2409.15001" />
         <PackageReference Include="MassTransit.RabbitMQ" Version="8.2.5" />
         <PackageReference Include="MassTransit.Hangfire" Version="8.2.5" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
