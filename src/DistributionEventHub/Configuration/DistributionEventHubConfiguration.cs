@@ -9,16 +9,11 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 /// <summary>
 ///     Basic configuration of the distribution event hub.
 /// </summary>
-internal class DistributionEventHubConfiguration : IDistributionEventHubConfiguration
-{
-    private readonly ServiceCollectionBusConfigurator _busConfigurator;
-    private readonly IServiceCollection _serviceCollection;
 
-    public DistributionEventHubConfiguration(IServiceCollection serviceCollection)
-    {
-        _serviceCollection = serviceCollection;
-        _busConfigurator = new ServiceCollectionBusConfigurator(serviceCollection);
-    }
+internal class DistributionEventHubConfiguration(IServiceCollection serviceCollection)
+    : IDistributionEventHubConfiguration
+{
+    private readonly ServiceCollectionBusConfigurator _busConfigurator = new(serviceCollection);
 
     /// <summary>
     ///     Use the publishing message scheduler to schedule messages using the Hangfire scheduler
@@ -48,7 +43,13 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
     {
         var requestTimeout = timeout ?? RequestTimeout.Default;
         _busConfigurator.AddRequestClient<TRequest>(new Uri($"queue:{commandName}?temporary=true"), requestTimeout);
-        _serviceCollection.AddScoped<ICommandClient<TRequest>, CommandClient<TRequest>>();
+        serviceCollection.AddScoped<ICommandClient<TRequest>, CommandClient<TRequest>>();
+    }
+    
+    public void AddRoutedCommandClient<TRequest>()
+        where TRequest : class
+    {
+        serviceCollection.AddScoped<IRoutedCommandClient<TRequest>, RoutedCommandClient<TRequest>>();
     }
 
     public void AddCommandConsumer<TConsumer, TMessage>(string commandName)
@@ -62,7 +63,7 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
                 c.Temporary = true;
                 c.ConfigureConsumeTopology = false;
             });
-        _serviceCollection.AddScoped<TConsumer>();
+        serviceCollection.AddScoped<TConsumer>();
     }
     
     public void AddBroadcastEventConsumer<TConsumer, TMessage>()
@@ -72,7 +73,7 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
         _busConfigurator
             .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
                 BroadcastEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>();
-        _serviceCollection.AddScoped<TConsumer>();
+        serviceCollection.AddScoped<TConsumer>();
     }
     
     public void AddRoutedEventConsumer<TConsumer, TMessage>(string destinationAddress)
@@ -82,12 +83,12 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
         EndpointConvention.Map<TMessage>(new Uri($"queue:{destinationAddress}"));
         _busConfigurator
             .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
-                RoutedEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>()
+                RoutedEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>, TMessage>>()
             .Endpoint(c =>
             {
                 c.Name = destinationAddress;
             });
-        _serviceCollection.AddScoped<TConsumer>();
+        serviceCollection.AddScoped<TConsumer>();
     }
 
 
@@ -97,8 +98,8 @@ internal class DistributionEventHubConfiguration : IDistributionEventHubConfigur
     {
         _busConfigurator
             .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
-                RoutedEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>();
-        _serviceCollection.AddScoped<TConsumer>();
+                RoutedEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>, TMessage>>();
+        serviceCollection.AddScoped<TConsumer>();
     }
 
     public ISagaRegistrationConfigurator<T>

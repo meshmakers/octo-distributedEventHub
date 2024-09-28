@@ -2,6 +2,7 @@ using MassTransit;
 using Meshmakers.Octo.Common.DistributionEventHub.Configuration.Options;
 using SampleEvents.Consumers;
 using SampleEvents.Messages;
+using SampleServiceMars.Services;
 using SampleServiceMars.StateMachine;
 
 namespace SampleServiceMars;
@@ -20,11 +21,13 @@ public class Program
             {
                 services.Configure<DistributionEventHubOptions>(options =>
                     hostContext.Configuration.GetSection("DistributionEventHub").Bind(options));
+                services.AddHostedService<TestService>();
                 services.AddDistributionEventHub(configuration =>
                 {
                     configuration.UniqueServiceAddress = "SampleServiceMars";
-                    configuration.AddCommandConsumer<SampleCommandRequestConsumer, SampleCommandRequest>("SampleCommandRequest");
+                    //configuration.AddCommandConsumer<SampleCommandRequestConsumer, SampleCommandRequest>("SampleCommandRequest");
                     configuration.AddRoutedEventConsumer<CreateTenantConsumer, CreateTenant>();
+                    //configuration.AddRoutedEventConsumer<UpdateEventConsumer, UpdateEvent>();
                     configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>();
                     configuration.AddBroadcastEventConsumer<BroadcastTestConsumer, BroadcastTest>();
                     configuration.AddCommandClient<ReserveStockRequest>("reserve-stock");

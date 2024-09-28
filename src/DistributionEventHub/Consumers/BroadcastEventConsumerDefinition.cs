@@ -3,6 +3,7 @@ using Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 
+// ReSharper disable once ClassNeverInstantiated.Global
 internal class BroadcastEventConsumerDefinition<TConsumer> : ConsumerDefinition<TConsumer>
     where TConsumer : class, IConsumer
 {
