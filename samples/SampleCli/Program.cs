@@ -44,7 +44,7 @@ static IServiceProvider BuildDi()
     services.AddTransient<Runner>();
 
     services.AddTransient<ICommand, ConfigOctoCommand>();
-    services.AddTransient<ICommand, PublishDirectEventsCommand>();
+    services.AddTransient<ICommand, PublishRoutedEventsCommand>();
     services.AddTransient<ICommand, PublishTenantCreateCommand>();
     services.AddTransient<ICommand, PublishTenantReloadCommand>();
     services.AddTransient<ICommand, PostCacheFileCommand>();

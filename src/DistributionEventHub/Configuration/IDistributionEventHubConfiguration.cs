@@ -31,16 +31,24 @@ public interface IDistributionEventHubConfiguration
     ///     Adds a bidirectional command to the DI container, by providing the command name and the
     ///     request type. A request client is added to the DI container.
     /// </summary>
-    /// <param name="commandName">Unique name of command (e. g. my-command)</param>
+    /// <param name="commandName">Unique name of command (e.g. my-command)</param>
     /// <param name="timeout">The default timeout of the command (default 30 seconds)</param>
     /// <typeparam name="TRequest">The request class of the commands</typeparam>
     void AddCommandClient<TRequest>(string commandName, TimeSpan? timeout = default)
         where TRequest : class;
 
     /// <summary>
+    ///     Adds a bidirectional command to the DI container, by providing the command name and the
+    ///     request type. A request client is added to the DI container.
+    /// </summary>
+    /// <typeparam name="TRequest">The request class of the commands</typeparam>
+    public void AddRoutedCommandClient<TRequest>()
+        where TRequest : class;
+    
+    /// <summary>
     ///     Adds a command consumer to the DI container, by providing the command name and the consumer type.
     /// </summary>
-    /// <param name="commandName">Unique name of command (e. g. my-command)</param>
+    /// <param name="commandName">Unique name of command (e.g. my-command)</param>
     /// <typeparam name="TConsumer">The consumer type class</typeparam>
     /// <typeparam name="TMessage">Type of incoming message</typeparam>
     void AddCommandConsumer<TConsumer, TMessage>(string commandName)

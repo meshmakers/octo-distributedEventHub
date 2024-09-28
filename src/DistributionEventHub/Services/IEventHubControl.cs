@@ -19,4 +19,31 @@ public interface IEventHubControl
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns></returns>
     Task StopAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Registers a handler for a routed event message with the specified destination address.
+    /// </summary>
+    /// <param name="destinationAddress">destination address of the message</param>
+    /// <param name="handler">Handler for the message</param>
+    /// <typeparam name="TMessage">Type of incoming message</typeparam>
+    EndpointHandle RegisterRoutedEventConsumer<TMessage>(string destinationAddress, Func<TMessage, Task> handler)
+        where TMessage : class;
+    
+    /// <summary>
+    ///     Registers a handler for a routed event message with the specified destination address.
+    /// </summary>
+    /// <param name="handler">Handler for the message</param>
+    /// <typeparam name="TMessage">Type of incoming message</typeparam>
+    EndpointHandle RegisterRoutedEventConsumer<TMessage>(Func<TMessage, Task> handler)
+        where TMessage : class;
+    
+    /// <summary>
+    ///     Registers a handler for a command message with the specified command name.
+    /// </summary>
+    /// <param name="commandName"></param>
+    /// <param name="handler"></param>
+    /// <typeparam name="TMessage"></typeparam>
+    /// <returns></returns>
+    EndpointHandle RegisterCommandConsumer<TMessage>(string commandName, ExecuteCommandHandler<TMessage> handler)
+        where TMessage : class;
 }

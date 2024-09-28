@@ -7,13 +7,13 @@ using SampleEvents.Messages;
 
 namespace SampleCli.Commands;
 
-public class PublishDirectEventsCommand : Command<OctoMonitoringOptions>
+public class PublishRoutedEventsCommand : Command<OctoMonitoringOptions>
 {
     private readonly IDistributionEventHubService _bus;
 
-    public PublishDirectEventsCommand(ILogger<PublishDirectEventsCommand> logger,
+    public PublishRoutedEventsCommand(ILogger<PublishRoutedEventsCommand> logger,
         IOptions<OctoMonitoringOptions> options, IDistributionEventHubService bus)
-        : base(logger, "publishDirectEvents", "test", options)
+        : base(logger, "publishRoutedEvents", "test", options)
     {
         _bus = bus;
     }
