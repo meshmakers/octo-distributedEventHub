@@ -3,10 +3,17 @@ namespace Meshmakers.Octo.Common.DistributionEventHub;
 /// <summary>
 ///     Common definitions of cache
 /// </summary>
-internal static class CacheCommon
+public static class CacheCommon
 {
     internal const string ServiceEndpointPattern = "octo::service::{0}";
 
-    internal const string ContentType = "contentType";
-    internal const string ExpiryDateTime = "expiryDateTime";
+    /// <summary>
+    /// Constant string that defines the content type
+    /// </summary>
+    public const string ContentType = "contentType";
+    
+    /// <summary>
+    /// Constant string that defines the expiry date time
+    /// </summary>
+    public const string ExpiryDateTime = "expiryDateTime";
 }

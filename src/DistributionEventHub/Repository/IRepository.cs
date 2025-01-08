@@ -1,5 +1,3 @@
-using MongoDB.Bson;
-
 namespace Meshmakers.Octo.Common.DistributionEventHub.Repository;
 
 /// <summary>
@@ -72,5 +70,5 @@ public interface IRepository
     /// <param name="id">The id of the stream</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>if the binary is not found, NULL is returned</returns>
-    Task<IDownloadStreamHandler?> DownloadBinaryAsync(ObjectId id, CancellationToken cancellationToken = default);
+    Task<IDownloadStreamHandler?> DownloadBinaryAsync(string id, CancellationToken cancellationToken = default);
 }

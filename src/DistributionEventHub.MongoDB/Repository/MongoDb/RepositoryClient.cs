@@ -1,10 +1,11 @@
 using Meshmakers.Octo.Common.DistributionEventHub.Configuration.Options;
+using Meshmakers.Octo.Common.DistributionEventHub.Repository;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using MongoDB.Driver.Core.Events;
 
-namespace Meshmakers.Octo.Common.DistributionEventHub.Repository.MongoDb;
+namespace Meshmakers.Octo.Common.DistributionEventHub.MongoDB.Repository.MongoDb;
 
 /// <summary>
 ///     Implementation of <see cref="IRepositoryClient" /> that uses a mongodb database for storage

@@ -1,5 +1,3 @@
-using MongoDB.Bson;
-
 namespace Meshmakers.Octo.Common.DistributionEventHub.Repository;
 
 /// <summary>
@@ -10,7 +8,7 @@ public interface IDownloadStreamHandler : IDisposable
     /// <summary>
     ///     Returns the object id of the binary
     /// </summary>
-    ObjectId Id { get; }
+    string Id { get; }
 
     /// <summary>
     ///     Returns the used content type during upload

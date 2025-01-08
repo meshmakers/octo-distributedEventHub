@@ -1,8 +1,10 @@
+using Meshmakers.Common.Shared;
+using Meshmakers.Octo.Common.DistributionEventHub.Repository;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.GridFS;
 
-namespace Meshmakers.Octo.Common.DistributionEventHub.Repository.MongoDb;
+namespace Meshmakers.Octo.Common.DistributionEventHub.MongoDB.Repository.MongoDb;
 
 internal class Repository : IRepository
 {
@@ -91,10 +93,10 @@ internal class Repository : IRepository
         return new DownloadInfo(gridFsFileInfo);
     }
 
-    public async Task<IDownloadStreamHandler?> DownloadBinaryAsync(ObjectId id, CancellationToken cancellationToken = default)
+    public async Task<IDownloadStreamHandler?> DownloadBinaryAsync(string id, CancellationToken cancellationToken = default)
     {
         var gridFsDownloadStream =
-            await _bucket.OpenDownloadStreamAsync(id, cancellationToken: cancellationToken).ConfigureAwait(false);
+            await _bucket.OpenDownloadStreamAsync(ObjectId.Parse(id), cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return new DownloadStreamHandler(gridFsDownloadStream);
     }

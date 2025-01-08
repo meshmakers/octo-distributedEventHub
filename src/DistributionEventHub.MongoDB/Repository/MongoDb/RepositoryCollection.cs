@@ -1,7 +1,8 @@
 using System.Linq.Expressions;
+using Meshmakers.Octo.Common.DistributionEventHub.Repository;
 using MongoDB.Driver;
 
-namespace Meshmakers.Octo.Common.DistributionEventHub.Repository.MongoDb;
+namespace Meshmakers.Octo.Common.DistributionEventHub.MongoDB.Repository.MongoDb;
 
 internal class RepositoryCollection<TKey, TDocument> : IRepositoryCollection<TKey, TDocument>
     where TKey : notnull
