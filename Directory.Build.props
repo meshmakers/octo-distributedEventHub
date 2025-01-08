@@ -12,7 +12,7 @@
     <PropertyGroup>
         <Authors>meshmakers GmbH and Contributors</Authors>
         <Company>meshmakers GmbH and Contributors</Company>
-        <Copyright>(c) 2022-2024 meshmakers GmbH</Copyright>
+        <Copyright>(c) 2022-2025 meshmakers GmbH</Copyright>
         <LangVersion>latestmajor</LangVersion>
         <Nullable>enable</Nullable>
         <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -22,14 +22,14 @@
         <PackageLicenseFile>LICENSE</PackageLicenseFile>
         <PackageProjectUrl>https://www.meshmakers.io</PackageProjectUrl>
         <PackageTags>Octo data mesh iot</PackageTags>
-        <TargetFramework>net8.0</TargetFramework>
+        <TargetFramework>net9.0</TargetFramework>
         <UserSecretsId>04bcde24-0d21-4346-8459-3bca58abec33</UserSecretsId>
         <OctoVersion Condition="'$(Configuration)'=='DebugL'">999.0.0</OctoVersion>
         <OctoVersion Condition="'$(OctoNugetPrivateServer)'!='' And '$(OctoVersion)'==''">0.1.*</OctoVersion>
-        <OctoVersion Condition="'$(OctoNugetPrivateServer)'=='' And '$(OctoVersion)'==''">3.1.*</OctoVersion>
+        <OctoVersion Condition="'$(OctoNugetPrivateServer)'=='' And '$(OctoVersion)'==''">3.2.*</OctoVersion>
         <Version Condition="'$(Configuration)'=='DebugL'">999.0.0</Version>
         <PackageVersion Condition="'$(Configuration)'=='DebugL'">999.0.0</PackageVersion>
-        <MeshmakerVersion>4.0.2411.19002</MeshmakerVersion>
+        <MeshmakerVersion>4.0.2501.8007</MeshmakerVersion>
         <MeshmakerVersion Condition="'$(Configuration)'=='DebugL'">999.0.0</MeshmakerVersion>
         <RestoreSources Condition="'$(OctoNugetPrivateServer)'!=''">$(OctoNugetPrivateServer)</RestoreSources>
         <RestoreSources Condition="'$(Configuration)'=='DebugL'">$(RestoreSources);$(OctoRepoRootPath)../nuget</RestoreSources>
