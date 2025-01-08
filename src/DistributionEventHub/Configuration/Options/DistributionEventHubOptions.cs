@@ -49,7 +49,7 @@ public class DistributionEventHubOptions
     public string SystemDatabaseName { get; set; }
 
     /// <summary>
-    ///     User name to access database for storage of sagas and temporary files
+    ///     Username to access database for storage of sagas and temporary files
     /// </summary>
     public string RepositoryUser { get; set; }
 

@@ -1,5 +1,3 @@
-using MongoDB.Bson;
-
 namespace Meshmakers.Octo.Common.DistributionEventHub.Repository;
 
 /// <summary>
@@ -15,7 +13,7 @@ public interface IDownloadInfo
     /// <summary>
     ///     Returns the object id of the binary
     /// </summary>
-    public ObjectId BinaryId { get; }
+    public string BinaryId { get; }
 
     /// <summary>
     ///     Returns the file name

@@ -1,7 +1,6 @@
 using Meshmakers.Octo.Common.DistributionEventHub.Payloads;
 using Meshmakers.Octo.Common.DistributionEventHub.Repository;
 using Meshmakers.Octo.Common.DistributionEventHub.Sagas;
-using MongoDB.Bson;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
@@ -53,7 +52,7 @@ internal class DistributedCacheService : IDistributedCacheService
     {
         var repositoryName = await _tenantResolver.GetRepositoryNameAsync(tenantId).ConfigureAwait(false);
         var persistentRepository = await _repositoryClient.GetRepositoryAsync(repositoryName).ConfigureAwait(false);
-        var downloadInfo = await persistentRepository.DownloadBinaryAsync(new ObjectId(cacheStreamKey)).ConfigureAwait(false);
+        var downloadInfo = await persistentRepository.DownloadBinaryAsync(cacheStreamKey).ConfigureAwait(false);
         if (downloadInfo == null)
         {
             return null;

@@ -1,9 +1,8 @@
 using MassTransit;
 using Meshmakers.Octo.Common.DistributionEventHub;
 using Meshmakers.Octo.Common.DistributionEventHub.Configuration;
+using Meshmakers.Octo.Common.DistributionEventHub.Configuration.DependencyInjection;
 using Meshmakers.Octo.Common.DistributionEventHub.Configuration.Options;
-using Meshmakers.Octo.Common.DistributionEventHub.Repository;
-using Meshmakers.Octo.Common.DistributionEventHub.Repository.MongoDb;
 using Meshmakers.Octo.Common.DistributionEventHub.Sagas;
 using Meshmakers.Octo.Common.DistributionEventHub.Sagas.Defaults;
 using Meshmakers.Octo.Common.DistributionEventHub.Services;
@@ -31,7 +30,7 @@ public static class ServiceCollectionExtensions
     ///     can
     ///     be chained.
     /// </returns>
-    public static IServiceCollection AddDistributionEventHubWithOptions(this IServiceCollection services,
+    public static IDistributedEventHubBuilder AddDistributionEventHubWithOptions(this IServiceCollection services,
         Action<DistributionEventHubOptions> setupAction, Action<IDistributionEventHubConfiguration> configurationAction)
     {
         services.AddOptions();
@@ -39,7 +38,7 @@ public static class ServiceCollectionExtensions
 
         AddDistributionEventHub(services, configurationAction);
 
-        return services;
+        return new DistributedEventHubBuilder(services);
     }
 
     /// <summary>
@@ -52,7 +51,7 @@ public static class ServiceCollectionExtensions
     ///     can
     ///     be chained.
     /// </returns>
-    public static IServiceCollection AddDistributionEventHub(this IServiceCollection services,
+    public static IDistributedEventHubBuilder AddDistributionEventHub(this IServiceCollection services,
         Action<IDistributionEventHubConfiguration> configurationAction)
     {
         services.AddOptions();
@@ -69,7 +68,6 @@ public static class ServiceCollectionExtensions
 
         services.Add(ServiceDescriptor.Singleton<IDistributedCacheService, DistributedCacheService>());
         services.TryAddSingleton<ITenantResolver, DefaultTenantResolver>();
-        services.TryAddSingleton<IRepositoryClient, RepositoryClient>();
         services.TryAddSingleton<IDistributionEventHubService, DistributionEventHubService>();
         services.AddSingleton<IBroadcastServiceAddress>(_ => new BroadcastServiceAddress(configuration.UniqueServiceAddress));
         services.AddTransient<IEventHubControl, EventHubControl>();
@@ -97,6 +95,6 @@ public static class ServiceCollectionExtensions
             });
         });
 
-        return services;
+        return new DistributedEventHubBuilder(services);
     }
 }
