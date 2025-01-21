@@ -66,7 +66,6 @@ public static class ServiceCollectionExtensions
 
         services.ConfigureOptions<ConfigureRabbitMqTransportOptions>();
 
-        services.Add(ServiceDescriptor.Singleton<IDistributedCacheService, DistributedCacheService>());
         services.TryAddSingleton<ITenantResolver, DefaultTenantResolver>();
         services.TryAddSingleton<IDistributionEventHubService, DistributionEventHubService>();
         services.AddSingleton<IBroadcastServiceAddress>(_ => new BroadcastServiceAddress(configuration.UniqueServiceAddress));

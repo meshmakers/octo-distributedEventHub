@@ -8,7 +8,7 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 ///     Implements a distributed cache with pub sub mechanisms using REDIS
 /// </summary>
 // ReSharper disable once ClassNeverInstantiated.Global
-internal class DistributedCacheService : IDistributedCacheService
+public class DistributedCacheService : IDistributedCacheService
 {
     private readonly IRepositoryClient _repositoryClient;
     private readonly ITenantResolver _tenantResolver;

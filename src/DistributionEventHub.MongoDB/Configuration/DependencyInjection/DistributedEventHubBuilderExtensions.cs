@@ -1,6 +1,8 @@
 using Meshmakers.Octo.Common.DistributionEventHub.Configuration.DependencyInjection;
 using Meshmakers.Octo.Common.DistributionEventHub.MongoDB.Repository.MongoDb;
 using Meshmakers.Octo.Common.DistributionEventHub.Repository;
+using Meshmakers.Octo.Common.DistributionEventHub.Services;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.MongoDB.Configuration.DependencyInjection
@@ -21,6 +23,7 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.MongoDB.Configuration.Depe
         /// </returns>
         public static IDistributedEventHubBuilder AddMongoDbRepository(this IDistributedEventHubBuilder builder)
         {
+            builder.Services.TryAdd(ServiceDescriptor.Singleton<IDistributedCacheService, DistributedCacheService>());
             builder.Services.TryAddSingleton<IRepositoryClient, RepositoryClient>();
 
             return builder;
