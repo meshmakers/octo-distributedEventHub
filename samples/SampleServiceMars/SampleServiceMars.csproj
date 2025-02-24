@@ -4,8 +4,8 @@
         <Platforms>AnyCPU</Platforms>
     </PropertyGroup>
     <ItemGroup>
-        <PackageReference Include="MassTransit.MongoDb" Version="8.3.4" />
-        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.1" />
+        <PackageReference Include="MassTransit.MongoDb" Version="8.3.6" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.2" />
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\SampleEvents\SampleEvents.csproj" />
