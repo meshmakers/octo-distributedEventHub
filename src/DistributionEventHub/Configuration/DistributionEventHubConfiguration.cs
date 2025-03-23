@@ -42,7 +42,7 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
         where TRequest : class
     {
         var requestTimeout = timeout ?? RequestTimeout.Default;
-        _busConfigurator.AddRequestClient<TRequest>(new Uri($"queue:{commandName}?temporary=true"), requestTimeout);
+        _busConfigurator.AddRequestClient<TRequest>(new Uri($"exchange:{commandName}?temporary=true"), requestTimeout);
         serviceCollection.AddScoped<ICommandClient<TRequest>, CommandClient<TRequest>>();
     }
     
