@@ -29,7 +29,7 @@ internal class RoutedCommandClient<TRequest> : IRoutedCommandClient<TRequest> wh
         var requestTimeout = timeout ?? RequestTimeout.Default;
         try
         {
-            var requestClient = _bus.CreateRequestClient<TRequest>(new Uri($"queue:{commandAddress}?temporary=true"), requestTimeout);
+            var requestClient = _bus.CreateRequestClient<TRequest>(new Uri($"exchange:{commandAddress}?temporary=true"), requestTimeout);
             var response = await requestClient.GetResponse<TResponse>(message, cancellationToken, requestTimeout)
                 .ConfigureAwait(false);
             return response.Message;
