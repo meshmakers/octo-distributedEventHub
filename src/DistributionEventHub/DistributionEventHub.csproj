@@ -14,11 +14,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Meshmakers.Common.Shared" Version="$(MeshmakerVersion)" />
-        <PackageReference Include="MassTransit.RabbitMQ" Version="8.4.0" />
-        <PackageReference Include="MassTransit.Hangfire" Version="8.4.0" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.3" />
-        <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.3" />
+        <PackageReference Include="Meshmakers.Common.Shared" Version="4.1.11" />
+        <PackageReference Include="MassTransit.RabbitMQ" Version="8.4.1" />
+        <PackageReference Include="MassTransit.Hangfire" Version="8.4.1" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.5" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.5" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     </ItemGroup>
 
