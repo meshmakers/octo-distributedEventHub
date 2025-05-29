@@ -43,12 +43,12 @@ stages:
           command: 'build'
           projects: |
             src/**/*.csproj
-          arguments: '--configuration $(buildConfiguration)'
+          arguments: '--configuration $(buildConfiguration) /p:OctoNugetPrivateServer=$(nugetPrivateServer)'
       - task: DotNetCoreCLI@2
         displayName: 'Test'
         inputs:
           command: 'test'
-          arguments: '--configuration $(buildConfiguration)'
+          arguments: '--configuration $(buildConfiguration) /p:OctoNugetPrivateServer=$(nugetPrivateServer)'
           projects: |
             **/*Tests.csproj
             !**/*SystemTests.csproj
