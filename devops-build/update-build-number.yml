@@ -20,6 +20,19 @@ steps:
       $buildNumberShort = "$major.$minor.$build"
       $buildNumberLong = "$major.$minor.$build.$revision"
       
+      if ($branch.StartsWith("refs/heads/test/")) {
+        $branchName = '$(Build.SourceBranchName)'
+        $versionArray = $versionString.Split(".")
+        $major = [int]$versionArray[0]
+        $minor = [int]$versionArray[1]
+        $build = [int]$versionArray[2]
+        $buildNumberShort = "$major.$minor.$build"
+        $buildNumberLong = "$major.$minor.$build.$revision"
+        $fullBuildNumber = "$major.$minor.$build.$revision-$(Build.SourceBranchName)"
+        Write-Host "Setting build number to $buildNumberLong"
+        Write-Host "##vso[build.updatebuildnumber]$fullBuildNumber"
+      }
+      
       if ($branch.StartsWith("refs/tags/r")) {
         $branchName = '$(Build.SourceBranchName)'
         $versionString = $branchName.SubString(1)
