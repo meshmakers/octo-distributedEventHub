@@ -25,7 +25,6 @@ steps:
         $versionArray = $versionString.Split(".")
         $major = [int]$versionArray[0]
         $minor = [int]$versionArray[1]
-        $build = [int]$versionArray[2]
         $buildNumberShort = "$major.$minor.$build"
         $buildNumberLong = "$major.$minor.$build.$revision"
         $fullBuildNumber = "$major.$minor.$build.$revision-$(Build.SourceBranchName)"
