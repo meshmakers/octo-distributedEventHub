@@ -20,11 +20,14 @@ public class Program
                     hostContext.Configuration.GetSection("DistributionEventHub").Bind(options));
                 services.AddDistributionEventHub(configuration =>
                 {
-                    configuration.UniqueServiceAddress = "SampleServiceMoon";
+                  //  configuration.UniqueServiceAddress = "SampleServiceMoon";
+                    configuration.UniqueServiceAddress = "SampleServiceEarth";
 
+                   // configuration.AddRoutedEventConsumer<CreateTenantConsumer, CreateTenant>();
+                    configuration.AddRoutedEventConsumer<UpdateEventConsumer, UpdateEvent>();
                     configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>();
                     configuration.AddBroadcastEventConsumer<BroadcastTestConsumer, BroadcastTest>();
-                    configuration.AddCommandConsumer<ReserveStockRequestConsumer, ReserveStockRequest>("reserve-stock");
+                    //configuration.AddCommandConsumer<ReserveStockRequestConsumer, ReserveStockRequest>("reserve-stock");
                 });
             });
     }

@@ -25,19 +25,25 @@ public class Program
                 services.AddDistributionEventHub(configuration =>
                 {
                     configuration.UniqueServiceAddress = "SampleServiceMars";
+                    
+                    // Example: Configure instance prefix for multi-instance deployments
+                    // This ensures complete isolation between different OctoMesh instances
+                    // configuration.InstancePrefix = "prod"; // or "dev", "staging", "test-env-1", etc.
+                    configuration.InstancePrefix = "Mars"; // Example instance prefix
+                    
                     //configuration.AddCommandConsumer<SampleCommandRequestConsumer, SampleCommandRequest>("SampleCommandRequest");
                     configuration.AddRoutedEventConsumer<CreateTenantConsumer, CreateTenant>();
-                    //configuration.AddRoutedEventConsumer<UpdateEventConsumer, UpdateEvent>();
+                    configuration.AddRoutedEventConsumer<UpdateEventConsumer, UpdateEvent>();
                     configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>();
                     configuration.AddBroadcastEventConsumer<BroadcastTestConsumer, BroadcastTest>();
                     configuration.AddCommandClient<ReserveStockRequest>("reserve-stock");
-                    configuration.AddSagaStateMachine<OrderStateMachine, OrderState>()
-                        .MongoDbRepository(r =>
-                        {
-                            r.Connection =
-                                "mongodb://octo-system-admin:OctoAdmin1@localhost:27017/?authSource=admin&readPreference=primary&directConnection=true&ssl=false";
-                            r.DatabaseName = "orderdb";
-                        });
+                    // configuration.AddSagaStateMachine<OrderStateMachine, OrderState>()
+                    //     .MongoDbRepository(r =>
+                    //     {
+                    //         r.Connection =
+                    //             "mongodb://octo-system-admin:OctoAdmin1@localhost:27017/?authSource=admin&readPreference=primary&directConnection=true&ssl=false";
+                    //         r.DatabaseName = "orderdb";
+                    //     });
                 });
             });
     }

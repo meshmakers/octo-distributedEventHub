@@ -35,7 +35,13 @@ public class PublishRoutedEventsCommand : Command<OctoMonitoringOptions>
 
             var str = DateTime.Now;
             Logger.LogInformation("Publishing message {Value}", str);
-            await _bus.PublishAsync(new UpdateEvent("test", "demo", str, i));
+            await _bus.PublishAsync(new UpdateEvent
+            {
+                TenantId = "test",
+                Name = "demo",
+                DateTime = str,
+                Value = i
+            });
             await Task.Delay(1000);
             i++;
         }

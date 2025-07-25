@@ -2,7 +2,8 @@ using MassTransit;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
-internal class DistributionEventHubService(IBus bus) : IDistributionEventHubService
+internal class DistributionEventHubService(IBus bus, IBroadcastServiceAddress serviceAddress)
+    : IDistributionEventHubService
 {
     public async Task ScheduleRecurringSendAsync<T>(T message, string destinationQueueAddress,
         RecurringSchedulingOptions recurringSchedulingOptions) where T : class
@@ -19,14 +20,17 @@ internal class DistributionEventHubService(IBus bus) : IDistributionEventHubServ
 
     public async Task PublishAsync<T>(T message, CancellationToken? cancellationToken = null) where T : class
     {
-        var endpoint = await bus.GetPublishSendEndpoint<T>().ConfigureAwait(false);
+        var prefixedExchangeName = bus.Topology.Message<T>().EntityNameFormatter.FormatEntityName();
+        var exchangeUri = new Uri($"exchange:{prefixedExchangeName}");
+        var endpoint = await bus.GetSendEndpoint(exchangeUri).ConfigureAwait(false);
         await endpoint.Send(message, cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
     }
 
     public async Task<Task> SendAsync<T>(Uri address, T message, CancellationToken? cancellationToken = null)
         where T : class
     {
-        var endpoint = await bus.GetSendEndpoint(address).ConfigureAwait(false);
+        var endpointAddress = CacheCommon.ApplyInstancePrefixToUri(serviceAddress.InstancePrefix, address);
+        var endpoint = await bus.GetSendEndpoint(endpointAddress).ConfigureAwait(false);
         return endpoint.Send(message, cancellationToken ?? CancellationToken.None);
     }
 }
