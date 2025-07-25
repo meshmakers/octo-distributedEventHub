@@ -58,11 +58,11 @@ public static class ServiceCollectionExtensions
         services.AddOptions();
 
         var configuration = new DistributionEventHubConfiguration(services);
-        configurationAction.Invoke(configuration);
 
         // Check if the instance prefix is set in the options
         var serviceProvider = services.BuildServiceProvider();
         var options = serviceProvider.GetService<IOptions<DistributionEventHubOptions>>();
+
         if (!string.IsNullOrWhiteSpace(options?.Value.InstancePrefix) && options?.Value.InstancePrefix != null)
         {
             configuration.InstancePrefix = options.Value.InstancePrefix;
@@ -73,6 +73,9 @@ public static class ServiceCollectionExtensions
             throw DistributedOperationFailedException.NoInstancePrefix();
         }
 
+        configurationAction.Invoke(configuration);
+
+        // The Unique service address is set in the configuration
         if (string.IsNullOrWhiteSpace(configuration.UniqueServiceAddress))
         {
             throw DistributedOperationFailedException.NoUniqueServiceAddress();
