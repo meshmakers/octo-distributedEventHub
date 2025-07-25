@@ -1,4 +1,5 @@
 using MassTransit;
+using Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 
@@ -7,11 +8,12 @@ internal class RoutedEventConsumerDefinition<TConsumer, TMessage> : ConsumerDefi
     where TConsumer : class, IConsumer
     where TMessage : class
 {
-    public RoutedEventConsumerDefinition()
+    public RoutedEventConsumerDefinition(IBroadcastServiceAddress serviceAddress)
     {
-        EndpointName = typeof(TMessage).FullName ?? "Unknown";
+        var baseEndpointName = string.Format(CacheCommon.ServiceEndpointPattern, typeof(TMessage).FullName);
+        EndpointName = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, baseEndpointName);
     }
-    
+
     protected override void ConfigureConsumer(IReceiveEndpointConfigurator endpointConfigurator,
         IConsumerConfigurator<TConsumer> consumerConfigurator,
         IRegistrationContext context)

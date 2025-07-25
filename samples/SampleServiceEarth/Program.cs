@@ -21,6 +21,14 @@ public class Program
                 services.AddDistributionEventHub(configuration =>
                 {
                     configuration.UniqueServiceAddress = "SampleServiceEarth";
+
+                    // InstancePrefix can be set in two ways:
+                    // 1. Via appsettings.json (recommended) - automatically applied from DistributionEventHubOptions
+                    // 2. Via code (takes precedence) - uncomment line below:
+                    // configuration.InstancePrefix = "prod"; // or "dev", "staging", etc.
+
+                    configuration.AddRoutedEventConsumer<CreateTenantConsumer, CreateTenant>();
+                    configuration.AddRoutedEventConsumer<UpdateEventConsumer, UpdateEvent>();
                     configuration.AddBroadcastEventConsumer<ReloadTenantConsumer, ReloadTenant>();
                     configuration.AddBroadcastEventConsumer<BroadcastTestConsumer, BroadcastTest>();
                     configuration.AddRoutedEventConsumer<OrderAcceptedConsumer, OrderAccepted>();

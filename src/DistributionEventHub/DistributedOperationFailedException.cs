@@ -40,4 +40,10 @@ public class DistributedOperationFailedException : DistributionException
         return new DistributedOperationFailedException(
             "Unique service address is not set. Please set the UniqueServiceAddress property.");
     }
+
+    internal static Exception NoInstancePrefix()
+    {
+        return new DistributedOperationFailedException(
+            "Instance prefix is not set. Please set the InstancePrefix property in the configuration.");
+    }
 }
