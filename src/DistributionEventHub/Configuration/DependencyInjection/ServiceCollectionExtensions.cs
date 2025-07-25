@@ -7,6 +7,7 @@ using Meshmakers.Octo.Common.DistributionEventHub.Sagas;
 using Meshmakers.Octo.Common.DistributionEventHub.Sagas.Defaults;
 using Meshmakers.Octo.Common.DistributionEventHub.Services;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 // ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection;
@@ -59,6 +60,19 @@ public static class ServiceCollectionExtensions
         var configuration = new DistributionEventHubConfiguration(services);
         configurationAction.Invoke(configuration);
 
+        // Check if the instance prefix is set in the options
+        var serviceProvider = services.BuildServiceProvider();
+        var options = serviceProvider.GetService<IOptions<DistributionEventHubOptions>>();
+        if (options?.Value.InstancePrefix != null)
+        {
+            configuration.InstancePrefix = options.Value.InstancePrefix;
+        }
+
+        if (string.IsNullOrWhiteSpace(configuration.InstancePrefix))
+        {
+            throw DistributedOperationFailedException.NoInstancePrefix();
+        }
+
         if (string.IsNullOrWhiteSpace(configuration.UniqueServiceAddress))
         {
             throw DistributedOperationFailedException.NoUniqueServiceAddress();
@@ -68,8 +82,10 @@ public static class ServiceCollectionExtensions
 
         services.TryAddSingleton<ITenantResolver, DefaultTenantResolver>();
         services.TryAddSingleton<IDistributionEventHubService, DistributionEventHubService>();
-        services.AddSingleton<IBroadcastServiceAddress>(_ => new BroadcastServiceAddress(configuration.UniqueServiceAddress));
+        services.AddSingleton<IBroadcastServiceAddress>(_ =>
+            new BroadcastServiceAddress(configuration.UniqueServiceAddress, configuration.InstancePrefix));
         services.AddTransient<IEventHubControl, EventHubControl>();
+
 
         services.AddMassTransit();
         if (!configuration.AutomaticallyStartBusDuringStartup)
@@ -79,18 +95,34 @@ public static class ServiceCollectionExtensions
 
         configuration.ConfigureMassTransit(x =>
         {
-            var schedulerEndpoint = new Uri(configuration.SchedulerEndpointAddress);
-            x.AddMessageScheduler(schedulerEndpoint);
+            var prefixedSchedulerAddress = CacheCommon.ApplyInstancePrefixToUri(configuration.InstancePrefix,
+                new Uri(configuration.SchedulerEndpointAddress));
+            x.AddMessageScheduler(prefixedSchedulerAddress);
 
             x.UsingRabbitMq((context, cfg) =>
             {
-                if (configuration.UsePublishMessageScheduler)
+                try
                 {
-                    cfg.UsePublishMessageScheduler();
-                }
+                    if (configuration.UsePublishMessageScheduler)
+                    {
+                        cfg.UsePublishMessageScheduler();
+                    }
 
-                cfg.UseMessageScheduler(schedulerEndpoint);
-                cfg.ConfigureEndpoints(context);
+                    cfg.UseMessageScheduler(prefixedSchedulerAddress);
+
+                    cfg.MessageTopology.SetEntityNameFormatter(
+                        new PrefixEntityNameFormatter(cfg.MessageTopology.EntityNameFormatter,
+                            CacheCommon.GetInstancePrefix(configuration.InstancePrefix)));
+
+                    cfg.ConfigureEndpoints(context,
+                        new DefaultEndpointNameFormatter(CacheCommon.GetInstancePrefix(configuration.InstancePrefix),
+                            false));
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
             });
         });
 

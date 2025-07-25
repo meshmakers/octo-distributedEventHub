@@ -6,7 +6,7 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 /// <summary>
 ///     Represents the event hub control
 /// </summary>
-internal class EventHubControl(IBusControl busControl) : IEventHubControl
+internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress serviceAddress) : IEventHubControl
 {
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -21,7 +21,9 @@ internal class EventHubControl(IBusControl busControl) : IEventHubControl
     public EndpointHandle RegisterRoutedEventConsumer<TMessage>(string destinationAddress, Func<TMessage, Task> handler)
         where TMessage : class
     {
-        var handle = busControl.ConnectReceiveEndpoint(destinationAddress,
+        var prefixedDestinationAddress = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, destinationAddress);
+
+        var handle = busControl.ConnectReceiveEndpoint(prefixedDestinationAddress,
             e =>
             {
                 e.Handler<TMessage>(async consumeContext =>
@@ -36,7 +38,8 @@ internal class EventHubControl(IBusControl busControl) : IEventHubControl
     public EndpointHandle RegisterRoutedEventConsumer<TMessage>(Func<TMessage, Task> handler)
         where TMessage : class
     {
-        var handle = busControl.ConnectReceiveEndpoint(typeof(TMessage).FullName ?? "Unknown",
+        var queueName = busControl.Topology.Message<TMessage>().EntityNameFormatter.FormatEntityName();
+        var handle = busControl.ConnectReceiveEndpoint(queueName,
             e =>
             {
                 e.Handler<TMessage>(async consumeContext =>
@@ -51,8 +54,8 @@ internal class EventHubControl(IBusControl busControl) : IEventHubControl
     public EndpointHandle RegisterCommandConsumer<TMessage>(string commandName, ExecuteCommandHandler<TMessage> handler)
         where TMessage : class
     {
-        
-        var handle = busControl.ConnectReceiveEndpoint(commandName,
+        var prefixedCommandName = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, commandName);
+        var handle = busControl.ConnectReceiveEndpoint(prefixedCommandName,
             e =>
             {
                 if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)

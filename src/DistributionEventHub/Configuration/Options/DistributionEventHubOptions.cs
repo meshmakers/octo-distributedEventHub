@@ -19,6 +19,12 @@ public class DistributionEventHubOptions
     }
 
     /// <summary>
+    /// Gets or sets the instance prefix for multi-instance OctoMesh deployments.
+    /// When set, this prefix will be prepended to all queue and exchange names to provide isolation between instances.
+    /// </summary>
+    public string? InstancePrefix { get; set; }
+
+    /// <summary>
     ///     The name of the message broker host
     /// </summary>
     public string BrokerHost { get; set; }
