@@ -21,6 +21,11 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
     public bool UsePublishMessageScheduler { get; private set; }
     
     /// <summary>
+    /// Gets or sets the instance prefix for multi-instance OctoMesh deployments.
+    /// </summary>
+    public string InstancePrefix { get; set; } = "default";
+
+    /// <summary>
     /// Defines the endpoint address for the scheduler
     /// </summary>
     public string SchedulerEndpointAddress { get; set; } = "queue:scheduler";
@@ -29,7 +34,12 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
     ///     Gets or sets the unique service name.
     /// </summary>
     public string UniqueServiceAddress { get; set; } = string.Empty;
-    
+
+    /// <summary>
+    /// Gets the endpoint name for the service.
+    /// </summary>
+    public string ServiceInstanceId { get; } = Guid.NewGuid().ToString();
+
     /// <summary>
     ///     Gets or sets a value indicating whether the bus should be automatically started during startup.
     /// </summary>
@@ -38,11 +48,12 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
     /// </remarks>
     public bool AutomaticallyStartBusDuringStartup { get; set; } = true;
 
-    public void AddCommandClient<TRequest>(string commandName, TimeSpan? timeout = default)
+    public void AddCommandClient<TRequest>(string commandName, TimeSpan? timeout = null)
         where TRequest : class
     {
         var requestTimeout = timeout ?? RequestTimeout.Default;
-        _busConfigurator.AddRequestClient<TRequest>(new Uri($"exchange:{commandName}?temporary=true"), requestTimeout);
+        var prefixedCommandName = CacheCommon.ApplyInstancePrefix(InstancePrefix, commandName);
+        _busConfigurator.AddRequestClient<TRequest>(new Uri($"exchange:{prefixedCommandName}?temporary=true"), requestTimeout);
         serviceCollection.AddScoped<ICommandClient<TRequest>, CommandClient<TRequest>>();
     }
     
@@ -56,10 +67,11 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
         where TConsumer : class, IDistributedConsumer<TMessage>
         where TMessage : class
     {
+        var prefixedCommandName = CacheCommon.ApplyInstancePrefix(InstancePrefix, commandName);
         _busConfigurator.AddConsumer<DistributedConsumer<TConsumer, TMessage>>()
             .Endpoint(c =>
             {
-                c.Name = commandName;
+                c.Name = prefixedCommandName;
                 c.Temporary = true;
                 c.ConfigureConsumeTopology = false;
             });
@@ -71,8 +83,13 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
         where TMessage : class
     {
         _busConfigurator
-            .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
-                BroadcastEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>();
+            .AddConsumer<DistributedConsumer<TConsumer, TMessage>>().Endpoint(c =>
+            {
+                var baseEndpointName = string.Format(CacheCommon.ServiceEndpointPattern,
+                    UniqueServiceAddress + "-" + ServiceInstanceId);
+                c.Name = CacheCommon.ApplyInstancePrefix(InstancePrefix, baseEndpointName);
+                c.Temporary = true;
+            });
         serviceCollection.AddScoped<TConsumer>();
     }
     
@@ -80,13 +97,17 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
         where TConsumer : class, IDistributedConsumer<TMessage>
         where TMessage : class
     {
-        EndpointConvention.Map<TMessage>(new Uri($"queue:{destinationAddress}"));
+        // TODO: Check if this is correct.
+        // We use here CustomerDefinitions and .Endpoint which result
+        // to a different endpoint name than the one used in the RoutedEventConsumerDefinition.
+        var prefixedAddress = CacheCommon.ApplyInstancePrefix(InstancePrefix, destinationAddress);
+        EndpointConvention.Map<TMessage>(new Uri($"queue:{prefixedAddress}"));
         _busConfigurator
             .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
                 RoutedEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>, TMessage>>()
             .Endpoint(c =>
             {
-                c.Name = destinationAddress;
+                c.Name = prefixedAddress;
             });
         serviceCollection.AddScoped<TConsumer>();
     }

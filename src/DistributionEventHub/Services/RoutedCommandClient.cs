@@ -11,16 +11,19 @@ internal class RoutedCommandClient<TRequest> : IRoutedCommandClient<TRequest> wh
 {
     private readonly IBus _bus;
     private readonly ILogger<RoutedCommandClient<TRequest>> _logger;
+    private readonly IBroadcastServiceAddress _serviceAddress;
 
     /// <summary>
     ///     Configures the command client
     /// </summary>
     /// <param name="bus"></param>
     /// <param name="logger"></param>
-    public RoutedCommandClient(IBus bus, ILogger<RoutedCommandClient<TRequest>> logger)
+    /// <param name="serviceAddress"></param>
+    public RoutedCommandClient(IBus bus, ILogger<RoutedCommandClient<TRequest>> logger, IBroadcastServiceAddress serviceAddress)
     {
         _bus = bus;
         _logger = logger;
+        _serviceAddress = serviceAddress;
     }
     
     public async Task<TResponse> GetResponse<TResponse>(string commandAddress, TRequest message, CancellationToken cancellationToken = default,
@@ -29,7 +32,8 @@ internal class RoutedCommandClient<TRequest> : IRoutedCommandClient<TRequest> wh
         var requestTimeout = timeout ?? RequestTimeout.Default;
         try
         {
-            var requestClient = _bus.CreateRequestClient<TRequest>(new Uri($"exchange:{commandAddress}?temporary=true"), requestTimeout);
+            var prefixedCommandAddress = CacheCommon.ApplyInstancePrefix(_serviceAddress.InstancePrefix, commandAddress);
+            var requestClient = _bus.CreateRequestClient<TRequest>(new Uri($"exchange:{prefixedCommandAddress}?temporary=true"), requestTimeout);
             var response = await requestClient.GetResponse<TResponse>(message, cancellationToken, requestTimeout)
                 .ConfigureAwait(false);
             return response.Message;

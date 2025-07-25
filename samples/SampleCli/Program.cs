@@ -4,6 +4,7 @@ using Meshmakers.Common.CommandLineParser;
 using Meshmakers.Common.CommandLineParser.Commands;
 using Meshmakers.Common.Configuration;
 using Meshmakers.Common.Shared.Services;
+using Meshmakers.Octo.Common.DistributionEventHub.MongoDB.Configuration.DependencyInjection;
 using Meshmakers.Octo.Common.DistributionEventHub.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,7 +40,7 @@ static IServiceProvider BuildDi()
         c.UniqueServiceAddress = "OctoDistributionEventHubMonitorCli";
 
         c.AddCommandClient<SampleCommandRequest>("SampleCommandRequest");
-    });
+    }).AddMongoDbRepository();
 
     services.AddTransient<Runner>();
 
@@ -79,7 +80,7 @@ IEventHubControl? eventHubControl = null;
 try
 {
     var serviceProvider = BuildDi();
-    using (serviceProvider as IDisposable)
+    await using (serviceProvider as IAsyncDisposable)
     {
         eventHubControl = serviceProvider.GetRequiredService<IEventHubControl>();
         await eventHubControl.StartAsync();

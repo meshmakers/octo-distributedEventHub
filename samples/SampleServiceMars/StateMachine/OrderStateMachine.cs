@@ -1,4 +1,5 @@
 using MassTransit;
+using Meshmakers.Octo.Common.DistributionEventHub.Services;
 using SampleEvents.Messages;
 
 namespace SampleServiceMars.StateMachine;
@@ -8,7 +9,7 @@ internal class OrderStateMachine :
 {
     // public State Final { get; private set; } 
 
-    public OrderStateMachine(ILogger<OrderStateMachine> logger)
+    public OrderStateMachine(ILogger<OrderStateMachine> logger, IDistributionEventHubService eventHub)
     {
         InstanceState(x => x.CurrentState);
 
@@ -41,16 +42,18 @@ internal class OrderStateMachine :
         During(Submitted,
             // handle the consumer successfully responding
             When(ReserveStock.Completed)
-                .Publish(context =>
+                .ThenAsync(async context =>
                 {
                     context.Saga.StockInfo = context.Message.Value;
 
                     logger.LogInformation("Order accepted published: {Text}", context.Message.Value);
-                    return new OrderAccepted
+                    
+                    // Use IDistributionEventHubService for proper instance prefix handling
+                    await eventHub.PublishAsync(new OrderAccepted
                     {
                         CorrelationId = context.Saga.CorrelationId,
                         Timestamp = context.Saga.SubmittedDateTime!.Value
-                    };
+                    });
                 })
                 .TransitionTo(Accepted),
 

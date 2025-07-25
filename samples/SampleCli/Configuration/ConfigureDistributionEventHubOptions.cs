@@ -4,15 +4,9 @@ using SampleCli.Configuration.Options;
 
 namespace SampleCli.Configuration;
 
-internal class ConfigureDistributionEventHubOptions : IConfigureNamedOptions<DistributionEventHubOptions>
+internal class ConfigureDistributionEventHubOptions(IOptions<OctoMonitoringOptions> octoMonitoringOptions)
+    : IConfigureNamedOptions<DistributionEventHubOptions>
 {
-    private readonly IOptions<OctoMonitoringOptions> _octoMonitoringOptions;
-
-    public ConfigureDistributionEventHubOptions(IOptions<OctoMonitoringOptions> octoMonitoringOptions)
-    {
-        _octoMonitoringOptions = octoMonitoringOptions;
-    }
-
     public void Configure(DistributionEventHubOptions options)
     {
         Configure(Microsoft.Extensions.Options.Options.DefaultName, options);
@@ -20,14 +14,14 @@ internal class ConfigureDistributionEventHubOptions : IConfigureNamedOptions<Dis
 
     public void Configure(string? name, DistributionEventHubOptions options)
     {
-        options.BrokerHost = _octoMonitoringOptions.Value.MessageBrokerHost;
-        options.BrokerPort = _octoMonitoringOptions.Value.MessageBrokerPort;
-        options.BrokerUser = _octoMonitoringOptions.Value.MessageBrokerUser;
-        options.BrokerPassword = _octoMonitoringOptions.Value.MessageBrokerPassword;
-        options.RepositoryHost = _octoMonitoringOptions.Value.RepositoryHost;
-        options.RepositoryUser = _octoMonitoringOptions.Value.RepositoryUser;
-        options.RepositoryPassword = _octoMonitoringOptions.Value.RepositoryPassword;
-        options.RepositoryUseTls = _octoMonitoringOptions.Value.RepositoryUseTls;
-        options.RepositoryAllowInsecureTls = _octoMonitoringOptions.Value.RepositoryAllowInsecureTls;
+        options.BrokerHost = octoMonitoringOptions.Value.MessageBrokerHost;
+        options.BrokerPort = octoMonitoringOptions.Value.MessageBrokerPort;
+        options.BrokerUser = octoMonitoringOptions.Value.MessageBrokerUser;
+        options.BrokerPassword = octoMonitoringOptions.Value.MessageBrokerPassword;
+        options.RepositoryHost = octoMonitoringOptions.Value.RepositoryHost;
+        options.RepositoryUser = octoMonitoringOptions.Value.RepositoryUser;
+        options.RepositoryPassword = octoMonitoringOptions.Value.RepositoryPassword;
+        options.RepositoryUseTls = octoMonitoringOptions.Value.RepositoryUseTls;
+        options.RepositoryAllowInsecureTls = octoMonitoringOptions.Value.RepositoryAllowInsecureTls;
     }
 }

@@ -10,9 +10,15 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 public interface IDistributionEventHubConfiguration
 {
     /// <summary>
+    /// Gets or sets the instance prefix for multi-instance OctoMesh deployments.
+    /// When set, this prefix will be prepended to all queue and exchange names to provide isolation between instances.
+    /// </summary>
+    string InstancePrefix { get; set; }
+
+    /// <summary>
     /// Defines the endpoint address for the scheduler
     /// </summary>
-    public string SchedulerEndpointAddress { get; set; }
+    string SchedulerEndpointAddress { get; set; }
     
     /// <summary>
     ///     Gets or sets the unique service address of this type of service
@@ -34,7 +40,7 @@ public interface IDistributionEventHubConfiguration
     /// <param name="commandName">Unique name of command (e.g. my-command)</param>
     /// <param name="timeout">The default timeout of the command (default 30 seconds)</param>
     /// <typeparam name="TRequest">The request class of the commands</typeparam>
-    void AddCommandClient<TRequest>(string commandName, TimeSpan? timeout = default)
+    void AddCommandClient<TRequest>(string commandName, TimeSpan? timeout = null)
         where TRequest : class;
 
     /// <summary>

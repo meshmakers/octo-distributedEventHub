@@ -9,4 +9,14 @@ internal interface IBroadcastServiceAddress
     ///     Returns the unique name of the service within the system.
     /// </summary>
     string ServiceName { get; }
+
+    /// <summary>
+    /// Gets the unique identifier for the service instance.
+    /// </summary>
+    string InstanceId { get; }
+    
+    /// <summary>
+    ///     Returns the instance prefix for multi-instance deployments.
+    /// </summary>
+    string InstancePrefix { get; }
 }
