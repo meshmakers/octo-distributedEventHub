@@ -63,7 +63,7 @@ public static class ServiceCollectionExtensions
         // Check if the instance prefix is set in the options
         var serviceProvider = services.BuildServiceProvider();
         var options = serviceProvider.GetService<IOptions<DistributionEventHubOptions>>();
-        if (!string.IsNullOrWhiteSpace(options?.Value.InstancePrefix))
+        if (!string.IsNullOrWhiteSpace(options?.Value.InstancePrefix) && options?.Value.InstancePrefix != null)
         {
             configuration.InstancePrefix = options.Value.InstancePrefix;
         }
