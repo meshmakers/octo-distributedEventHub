@@ -49,6 +49,22 @@ public interface IRepository
     Task DeleteBinaryAsync(string cacheStreamKey, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Deletes all binaries from the repository that defined an expiry time
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns></returns>
+    Task DeleteAllBinariesWithExpiryAsync(CancellationToken cancellationToken = default);
+
+
+    /// <summary>
+    /// Deletes all binaries from the repository that are expired
+    /// </summary>
+    /// <param name="expiry">The expiry date and time</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns></returns>
+    Task DeleteAllExpiredBinariesAsync(DateTime expiry, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Gets a binary from the repository using the id
     /// </summary>
     /// <param name="cacheStreamKey">The key identifying the stream</param>

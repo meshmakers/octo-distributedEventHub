@@ -40,6 +40,22 @@ public class DistributedCacheService : IDistributedCacheService
     }
 
     /// <inheritdoc />
+    public async Task DeleteAllCacheStreamsAsync(string tenantId)
+    {
+        var repositoryName = await _tenantResolver.GetRepositoryNameAsync(tenantId).ConfigureAwait(false);
+        var persistentRepository = await _repositoryClient.GetRepositoryAsync(repositoryName).ConfigureAwait(false);
+        await persistentRepository.DeleteAllBinariesWithExpiryAsync().ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task DeleteAllExpiredCacheStreamsAsync(string tenantId)
+    {
+        var repositoryName = await _tenantResolver.GetRepositoryNameAsync(tenantId).ConfigureAwait(false);
+        var persistentRepository = await _repositoryClient.GetRepositoryAsync(repositoryName).ConfigureAwait(false);
+        await persistentRepository.DeleteAllExpiredBinariesAsync(DateTime.UtcNow).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
     public async Task DeleteCacheStreamAsync(string tenantId, string cacheStreamKey)
     {
         var repositoryName = await _tenantResolver.GetRepositoryNameAsync(tenantId).ConfigureAwait(false);
