@@ -77,6 +77,28 @@ internal class Repository : IRepository
         await _bucket.DeleteAsync(cacheStreamKey, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task DeleteAllBinariesWithExpiryAsync(CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<GridFSFileInfo>.Filter.Ne(CacheCommon.ExpiryDateTime, BsonNull.Value);
+        var asyncCursor = await _bucket.FindAsync(filter, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var gridFsFileInfos = await asyncCursor.ToListAsync(cancellationToken);
+        foreach (var gridFsFileInfo in gridFsFileInfos)
+        {
+            await _bucket.DeleteAsync(gridFsFileInfo.Id, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    public async Task DeleteAllExpiredBinariesAsync(DateTime expiry, CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<GridFSFileInfo>.Filter.Lte(CacheCommon.ExpiryDateTime, expiry);
+        var asyncCursor = await _bucket.FindAsync(filter, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var gridFsFileInfos = await asyncCursor.ToListAsync(cancellationToken);
+        foreach (var gridFsFileInfo in gridFsFileInfos)
+        {
+            await _bucket.DeleteAsync(gridFsFileInfo.Id, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     public async Task<IDownloadInfo?> GetBinaryByIdAsync(string cacheStreamKey, CancellationToken cancellationToken = default)
     {
         var filter = Builders<GridFSFileInfo>.Filter.Eq("_id", cacheStreamKey);

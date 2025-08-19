@@ -34,6 +34,20 @@ public interface IDistributedCacheService
     Task<string> CreateOrUpdateStreamAsync(string tenantId, Stream stream, string contentType, string fileName);
 
     /// <summary>
+    /// Deletes all cached streams for a tenant independently of their expiry time
+    /// </summary>
+    /// <param name="tenantId">The tenant id</param>
+    /// <returns></returns>
+    Task DeleteAllCacheStreamsAsync(string tenantId);
+
+    /// <summary>
+    /// Deletes all cached streams for a tenant that are expired
+    /// </summary>
+    /// <param name="tenantId">The tenant id</param>
+    /// <returns></returns>
+    Task DeleteAllExpiredCacheStreamsAsync(string tenantId);
+
+    /// <summary>
     ///     Deletes a cached stream
     /// </summary>
     /// <param name="tenantId">The tenant id</param>
