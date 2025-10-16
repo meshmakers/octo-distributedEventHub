@@ -11,13 +11,13 @@
 
 
     <ItemGroup>
-        <PackageReference Include="Meshmakers.Common.CommandLineParser" Version="4.1.18" />
-        <PackageReference Include="Meshmakers.Common.Configuration" Version="4.1.18" />
-        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.7" />
-        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.7" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.7" />
-        <PackageReference Include="NLog" Version="6.0.2" />
-        <PackageReference Include="NLog.Extensions.Logging" Version="6.0.2" />
+        <PackageReference Include="Meshmakers.Common.CommandLineParser" Version="4.1.23" />
+        <PackageReference Include="Meshmakers.Common.Configuration" Version="4.1.23" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.10" />
+        <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.10" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.10" />
+        <PackageReference Include="NLog" Version="6.0.5" />
+        <PackageReference Include="NLog.Extensions.Logging" Version="6.0.5" />
     </ItemGroup>
 
     <ItemGroup>
