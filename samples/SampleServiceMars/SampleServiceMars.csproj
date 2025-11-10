@@ -4,7 +4,7 @@
         <Platforms>AnyCPU</Platforms>
     </PropertyGroup>
     <ItemGroup>
-        <PackageReference Include="MassTransit.MongoDb" Version="8.5.4" />
+        <PackageReference Include="MassTransit.MongoDb" Version="8.5.5" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.10" />
     </ItemGroup>
     <ItemGroup>
