@@ -9,7 +9,10 @@ internal class DistributionEventHubService(IBus bus, IBroadcastServiceAddress se
         RecurringSchedulingOptions recurringSchedulingOptions) where T : class
     {
         var recurringSchedule = new OctoRecurringSchedule(recurringSchedulingOptions);
-        await bus.ScheduleRecurringSend(new Uri(destinationQueueAddress), recurringSchedule, message)
+        var prefixedDestinationQueueAddress =
+            CacheCommon.ApplyInstancePrefixToUri(serviceAddress.InstancePrefix, new Uri(destinationQueueAddress));
+        
+        await bus.ScheduleRecurringSend(prefixedDestinationQueueAddress, recurringSchedule, message)
             .ConfigureAwait(false);
     }
 
