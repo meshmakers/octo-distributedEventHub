@@ -97,14 +97,13 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
         where TConsumer : class, IDistributedConsumer<TMessage>
         where TMessage : class
     {
-        // TODO: Check if this is correct.
-        // We use here CustomerDefinitions and .Endpoint which result
-        // to a different endpoint name than the one used in the RoutedEventConsumerDefinition.
         var prefixedAddress = CacheCommon.ApplyInstancePrefix(InstancePrefix, destinationAddress);
         EndpointConvention.Map<TMessage>(new Uri($"queue:{prefixedAddress}"));
+        // When explicit destination address is provided, don't use RoutedEventConsumerDefinition
+        // as it would override the endpoint name with a message-type-based name.
+        // Register the consumer directly with the explicit endpoint name instead.
         _busConfigurator
-            .AddConsumer<DistributedConsumer<TConsumer, TMessage>,
-                RoutedEventConsumerDefinition<DistributedConsumer<TConsumer, TMessage>, TMessage>>()
+            .AddConsumer<DistributedConsumer<TConsumer, TMessage>>()
             .Endpoint(c =>
             {
                 c.Name = prefixedAddress;
