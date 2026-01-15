@@ -10,9 +10,15 @@
         <OutputPath>..\..\bin\$(Configuration)\</OutputPath>
         <DocumentationFile>..\..\bin\$(Configuration)\$(AssemblyName).xml</DocumentationFile>
     </PropertyGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="Meshmakers.Octo.Common.DistributionEventHub.UnitTests" />
+        <InternalsVisibleTo Include="Meshmakers.Octo.Common.DistributionEventHub.IntegrationTests" />
+        <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+    </ItemGroup>
     
     <ItemGroup>
-        <PackageReference Include="MongoDB.Driver" Version="3.5.0" />
+        <PackageReference Include="MongoDB.Driver" Version="3.5.2" />
     </ItemGroup>
 
     <ItemGroup>

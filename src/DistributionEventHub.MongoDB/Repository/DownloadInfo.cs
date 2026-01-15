@@ -9,7 +9,7 @@ internal class DownloadInfo : IDownloadInfo
 
     public DownloadInfo(GridFSFileInfo fsFileInfo)
     {
-        _fsFileInfo = fsFileInfo;
+        _fsFileInfo = fsFileInfo ?? throw new ArgumentNullException(nameof(fsFileInfo));
     }
 
     public string ContentType => _fsFileInfo.Metadata.GetValue(CacheCommon.ContentType).AsString;

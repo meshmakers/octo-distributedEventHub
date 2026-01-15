@@ -14,11 +14,17 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="Meshmakers.Octo.Common.DistributionEventHub.UnitTests" />
+        <InternalsVisibleTo Include="Meshmakers.Octo.Common.DistributionEventHub.IntegrationTests" />
+        <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+    </ItemGroup>
+
+    <ItemGroup>
         <PackageReference Include="Meshmakers.Common.Shared" Version="$(MeshmakerVersion)" />
-        <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.5" />
-        <PackageReference Include="MassTransit.Hangfire" Version="8.5.5" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
-        <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
+        <PackageReference Include="MassTransit.RabbitMQ" Version="[8.5.7]" />
+        <PackageReference Include="MassTransit.Hangfire" Version="[8.5.7]" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.2" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.2" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     </ItemGroup>
 

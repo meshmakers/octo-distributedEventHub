@@ -56,7 +56,7 @@ internal class Repository : IRepository
         var downloadInfo = await GetBinaryByFileNameAsync(fileName, cancellationToken).ConfigureAwait(false);
         if (downloadInfo != null)
         {
-            await _bucket.DeleteAsync(downloadInfo.BinaryId, cancellationToken).ConfigureAwait(false);
+            await _bucket.DeleteAsync(ObjectId.Parse(downloadInfo.BinaryId), cancellationToken).ConfigureAwait(false);
         }
         
         var cacheStreamKey = ObjectId.GenerateNewId();
@@ -74,7 +74,7 @@ internal class Repository : IRepository
 
     public async Task DeleteBinaryAsync(string cacheStreamKey, CancellationToken cancellationToken = default)
     {
-        await _bucket.DeleteAsync(cacheStreamKey, cancellationToken).ConfigureAwait(false);
+        await _bucket.DeleteAsync(ObjectId.Parse(cacheStreamKey), cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteAllBinariesWithExpiryAsync(CancellationToken cancellationToken = default)
@@ -101,10 +101,10 @@ internal class Repository : IRepository
 
     public async Task<IDownloadInfo?> GetBinaryByIdAsync(string cacheStreamKey, CancellationToken cancellationToken = default)
     {
-        var filter = Builders<GridFSFileInfo>.Filter.Eq("_id", cacheStreamKey);
+        var filter = Builders<GridFSFileInfo>.Filter.Eq("_id", ObjectId.Parse(cacheStreamKey));
         var asyncCursor = await _bucket.FindAsync(filter, cancellationToken: cancellationToken).ConfigureAwait(false);
         var gridFsFileInfo = await asyncCursor.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-        return new DownloadInfo(gridFsFileInfo);
+        return gridFsFileInfo == null ? null : new DownloadInfo(gridFsFileInfo);
     }
     
     public async Task<IDownloadInfo?> GetBinaryByFileNameAsync(string fileName, CancellationToken cancellationToken = default)
@@ -112,15 +112,22 @@ internal class Repository : IRepository
         var filter = Builders<GridFSFileInfo>.Filter.Eq("Filename", fileName);
         var asyncCursor = await _bucket.FindAsync(filter, cancellationToken: cancellationToken).ConfigureAwait(false);
         var gridFsFileInfo = await asyncCursor.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
-        return new DownloadInfo(gridFsFileInfo);
+        return gridFsFileInfo == null ? null : new DownloadInfo(gridFsFileInfo);
     }
 
     public async Task<IDownloadStreamHandler?> DownloadBinaryAsync(string id, CancellationToken cancellationToken = default)
     {
-        var gridFsDownloadStream =
-            await _bucket.OpenDownloadStreamAsync(ObjectId.Parse(id), cancellationToken: cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var gridFsDownloadStream =
+                await _bucket.OpenDownloadStreamAsync(ObjectId.Parse(id), cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return new DownloadStreamHandler(gridFsDownloadStream);
+            return new DownloadStreamHandler(gridFsDownloadStream);
+        }
+        catch (GridFSFileNotFoundException)
+        {
+            return null;
+        }
     }
     
     private string GetCollectionName<T>(string? suffix = null) where T : class, new()
