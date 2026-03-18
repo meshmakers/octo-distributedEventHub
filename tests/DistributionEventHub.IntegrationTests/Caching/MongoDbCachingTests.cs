@@ -21,7 +21,7 @@ public class MongoDbCachingTests : IAsyncLifetime
         _mongoDb = mongoDb;
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -49,7 +49,7 @@ public class MongoDbCachingTests : IAsyncLifetime
         await Task.Delay(1000); // Wait for connections
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _serviceProvider.DisposeAsync();
     }
@@ -76,7 +76,7 @@ public class MongoDbCachingTests : IAsyncLifetime
         retrieved.FileName.Should().Be(fileName);
 
         using var reader = new StreamReader(retrieved.Stream);
-        var retrievedContent = await reader.ReadToEndAsync();
+        var retrievedContent = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
         retrievedContent.Should().Be("Test content for caching");
     }
 
@@ -134,7 +134,7 @@ public class MongoDbCachingTests : IAsyncLifetime
         // Assert
         retrieved.Should().NotBeNull();
         using var reader = new StreamReader(retrieved!.Stream);
-        var content = await reader.ReadToEndAsync();
+        var content = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
         content.Should().Be("Updated content");
     }
 

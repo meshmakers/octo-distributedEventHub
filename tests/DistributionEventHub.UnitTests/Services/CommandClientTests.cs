@@ -35,7 +35,7 @@ public class CommandClientTests
             .ReturnsAsync(responseMock.Object);
 
         // Act
-        var result = await _sut.GetResponse<TestResponse>(request);
+        var result = await _sut.GetResponse<TestResponse>(request, TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().BeEquivalentTo(expectedResponse);
@@ -56,7 +56,7 @@ public class CommandClientTests
             .ReturnsAsync(responseMock.Object);
 
         // Act
-        var result = await _sut.GetResponse<TestResponse>(request, timeout: timeout);
+        var result = await _sut.GetResponse<TestResponse>(request, TestContext.Current.CancellationToken, timeout);
 
         // Assert
         result.Should().BeEquivalentTo(expectedResponse);
@@ -75,7 +75,7 @@ public class CommandClientTests
             .ThrowsAsync(new RequestTimeoutException("Timeout"));
 
         // Act & Assert
-        await _sut.Invoking(s => s.GetResponse<TestResponse>(request))
+        await _sut.Invoking(s => s.GetResponse<TestResponse>(request, TestContext.Current.CancellationToken))
             .Should().ThrowAsync<DistributionTimeoutException>();
     }
 
@@ -89,7 +89,7 @@ public class CommandClientTests
             .ThrowsAsync(new InvalidOperationException("Some error"));
 
         // Act & Assert
-        await _sut.Invoking(s => s.GetResponse<TestResponse>(request))
+        await _sut.Invoking(s => s.GetResponse<TestResponse>(request, TestContext.Current.CancellationToken))
             .Should().ThrowAsync<DistributedOperationFailedException>();
     }
 
@@ -107,7 +107,7 @@ public class CommandClientTests
             .ReturnsAsync(responseMock.Object);
 
         // Act
-        var result = await _sut.GetResponseWithRetry<TestResponse>(request, retryCount: 3);
+        var result = await _sut.GetResponseWithRetry<TestResponse>(request, retryCount: 3, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().BeEquivalentTo(expectedResponse);
@@ -137,7 +137,7 @@ public class CommandClientTests
             });
 
         // Act
-        var result = await _sut.GetResponseWithRetry<TestResponse>(request, retryCount: 5);
+        var result = await _sut.GetResponseWithRetry<TestResponse>(request, retryCount: 5, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         result.Should().BeEquivalentTo(expectedResponse);
@@ -154,7 +154,7 @@ public class CommandClientTests
             .ThrowsAsync(new RequestTimeoutException("Timeout"));
 
         // Act & Assert
-        await _sut.Invoking(s => s.GetResponseWithRetry<TestResponse>(request, retryCount: 3))
+        await _sut.Invoking(s => s.GetResponseWithRetry<TestResponse>(request, retryCount: 3, cancellationToken: TestContext.Current.CancellationToken))
             .Should().ThrowAsync<DistributedOperationFailedException>()
             .WithMessage("*failed after 3 retries*");
     }
@@ -174,7 +174,7 @@ public class CommandClientTests
             });
 
         // Act & Assert
-        await _sut.Invoking(s => s.GetResponseWithRetry<TestResponse>(request))
+        await _sut.Invoking(s => s.GetResponseWithRetry<TestResponse>(request, cancellationToken: TestContext.Current.CancellationToken))
             .Should().ThrowAsync<DistributedOperationFailedException>();
 
         callCount.Should().Be(5);

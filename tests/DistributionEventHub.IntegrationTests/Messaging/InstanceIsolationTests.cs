@@ -24,7 +24,7 @@ public class InstanceIsolationTests : IAsyncLifetime
         _rabbitMq = rabbitMq;
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _instance1Prefix = $"instance-a-{Guid.NewGuid():N}";
         _instance2Prefix = $"instance-b-{Guid.NewGuid():N}";
@@ -71,7 +71,7 @@ public class InstanceIsolationTests : IAsyncLifetime
         return services.BuildServiceProvider();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         var eventHubControl1 = _instance1Provider.GetRequiredService<IEventHubControl>();
         await eventHubControl1.StopAsync();
@@ -98,7 +98,7 @@ public class InstanceIsolationTests : IAsyncLifetime
         await eventHub2.PublishAsync(message2);
 
         // Wait for messages
-        await Task.Delay(5000);
+        await Task.Delay(5000, TestContext.Current.CancellationToken);
 
         // Assert - Each instance should only receive its own message
         var instance1Messages = _receivedMessages.Where(m => m.Instance == _instance1Prefix).ToList();

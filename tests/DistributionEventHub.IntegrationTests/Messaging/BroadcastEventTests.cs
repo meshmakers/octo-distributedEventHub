@@ -21,7 +21,7 @@ public class BroadcastEventTests : IAsyncLifetime
         _rabbitMq = rabbitMq;
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -52,7 +52,7 @@ public class BroadcastEventTests : IAsyncLifetime
         await Task.Delay(1000);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         var eventHubControl = _serviceProvider.GetRequiredService<IEventHubControl>();
         await eventHubControl.StopAsync();
@@ -90,7 +90,7 @@ public class BroadcastEventTests : IAsyncLifetime
         foreach (var message in messages)
         {
             await eventHub.PublishAsync(message);
-            await Task.Delay(100); // Small delay between publishes for stability
+            await Task.Delay(100, TestContext.Current.CancellationToken); // Small delay between publishes for stability
         }
 
         // Assert
