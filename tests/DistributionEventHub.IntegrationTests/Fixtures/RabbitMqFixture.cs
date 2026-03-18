@@ -20,12 +20,12 @@ public class RabbitMqFixture : IAsyncLifetime
             .Build();
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         await _container.StartAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         await _container.DisposeAsync();
     }

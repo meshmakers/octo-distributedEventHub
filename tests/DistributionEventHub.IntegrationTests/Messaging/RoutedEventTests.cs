@@ -23,7 +23,7 @@ public class RoutedEventTests : IAsyncLifetime
         _rabbitMq = rabbitMq;
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _instancePrefix = $"routed-test-{Guid.NewGuid():N}";
 
@@ -57,7 +57,7 @@ public class RoutedEventTests : IAsyncLifetime
         await Task.Delay(1000);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         var eventHubControl = _serviceProvider.GetRequiredService<IEventHubControl>();
         await eventHubControl.StopAsync();
@@ -78,7 +78,7 @@ public class RoutedEventTests : IAsyncLifetime
 
         // Act
         var endpoint = await bus.GetSendEndpoint(destinationUri);
-        await endpoint.Send(message);
+        await endpoint.Send(message, TestContext.Current.CancellationToken);
 
         // Assert - Wait for message to be consumed
         await TestHelpers.WaitForCondition(
@@ -104,7 +104,7 @@ public class RoutedEventTests : IAsyncLifetime
         var endpoint = await bus.GetSendEndpoint(destinationUri);
         foreach (var message in messages)
         {
-            await endpoint.Send(message);
+            await endpoint.Send(message, TestContext.Current.CancellationToken);
         }
 
         // Assert

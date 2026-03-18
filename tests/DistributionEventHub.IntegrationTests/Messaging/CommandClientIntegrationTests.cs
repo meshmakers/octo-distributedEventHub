@@ -22,7 +22,7 @@ public class CommandClientIntegrationTests : IAsyncLifetime
         _rabbitMq = rabbitMq;
     }
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         _instancePrefix = $"cmd-test-{Guid.NewGuid():N}";
 
@@ -79,7 +79,7 @@ public class CommandClientIntegrationTests : IAsyncLifetime
         await Task.Delay(1000);
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         var clientEventHubControl = _clientServiceProvider.GetRequiredService<IEventHubControl>();
         await clientEventHubControl.StopAsync();
@@ -99,7 +99,7 @@ public class CommandClientIntegrationTests : IAsyncLifetime
         var request = new EchoRequest { Message = "Hello, World!" };
 
         // Act
-        var response = await client.GetResponse<EchoResponse>(request);
+        var response = await client.GetResponse<EchoResponse>(request, TestContext.Current.CancellationToken);
 
         // Assert
         response.Echo.Should().Be("Echo: Hello, World!");
@@ -129,8 +129,8 @@ public class CommandClientIntegrationTests : IAsyncLifetime
         var client = _clientServiceProvider.GetRequiredService<ICommandClient<EchoRequest>>();
 
         // Act
-        var response1 = await client.GetResponse<EchoResponse>(new EchoRequest { Message = "First" });
-        var response2 = await client.GetResponse<EchoResponse>(new EchoRequest { Message = "Second" });
+        var response1 = await client.GetResponse<EchoResponse>(new EchoRequest { Message = "First" }, TestContext.Current.CancellationToken);
+        var response2 = await client.GetResponse<EchoResponse>(new EchoRequest { Message = "Second" }, TestContext.Current.CancellationToken);
 
         // Assert
         response1.Echo.Should().Be("Echo: First");
