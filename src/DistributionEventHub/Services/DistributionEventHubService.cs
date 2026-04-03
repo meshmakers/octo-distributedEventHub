@@ -36,4 +36,14 @@ internal class DistributionEventHubService(IBus bus, IBroadcastServiceAddress se
         var endpoint = await bus.GetSendEndpoint(endpointAddress).ConfigureAwait(false);
         return endpoint.Send(message, cancellationToken ?? CancellationToken.None);
     }
+
+    public async Task<Task> SendToExchangeAsync<T>(string exchangeName, string routingKey, T message,
+        CancellationToken? cancellationToken = null) where T : class
+    {
+        var prefixedExchangeName = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, exchangeName);
+        var exchangeUri = new Uri($"exchange:{prefixedExchangeName}?type=topic");
+        var endpoint = await bus.GetSendEndpoint(exchangeUri).ConfigureAwait(false);
+        return endpoint.Send(message, context => { context.SetRoutingKey(routingKey); },
+            cancellationToken ?? CancellationToken.None);
+    }
 }

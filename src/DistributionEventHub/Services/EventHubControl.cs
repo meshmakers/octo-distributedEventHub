@@ -51,6 +51,39 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
         return new EndpointHandle(handle);
     }
     
+    public EndpointHandle RegisterRoutedEventConsumer<TMessage>(string exchangeName, string routingKey,
+        Func<TMessage, Task> handler) where TMessage : class
+    {
+        var prefixedExchangeName = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, exchangeName);
+        var sanitizedRoutingKey = routingKey.Replace(".", "-").Replace("#", "_").Replace("*", "_");
+        var queueName = $"{prefixedExchangeName}-{sanitizedRoutingKey}-{Guid.NewGuid():N}";
+
+        var handle = busControl.ConnectReceiveEndpoint(queueName,
+            e =>
+            {
+                e.ConfigureConsumeTopology = false;
+
+                if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
+                {
+                    rabbitConfigurator.AutoDelete = true;
+                    rabbitConfigurator.Durable = false;
+
+                    rabbitConfigurator.Bind(prefixedExchangeName, bindConfig =>
+                    {
+                        bindConfig.RoutingKey = routingKey;
+                        bindConfig.ExchangeType = "topic";
+                    });
+                }
+
+                e.Handler<TMessage>(async consumeContext =>
+                {
+                    await handler(consumeContext.Message).ConfigureAwait(false);
+                });
+            });
+
+        return new EndpointHandle(handle);
+    }
+
     public EndpointHandle RegisterCommandConsumer<TMessage>(string commandName, ExecuteCommandHandler<TMessage> handler)
         where TMessage : class
     {
