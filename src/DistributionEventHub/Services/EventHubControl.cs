@@ -55,7 +55,7 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
         Func<TMessage, Task> handler) where TMessage : class
     {
         var prefixedExchangeName = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, exchangeName);
-        var sanitizedRoutingKey = routingKey.Replace(".", "-").Replace("#", "_").Replace("*", "_");
+        var sanitizedRoutingKey = routingKey.Replace(".", "-").Replace("#", "_").Replace("*", "_").Replace("/", "-").Replace("@", "-");
         var queueName = $"{prefixedExchangeName}-{sanitizedRoutingKey}-{Guid.NewGuid():N}";
 
         var handle = busControl.ConnectReceiveEndpoint(queueName,
