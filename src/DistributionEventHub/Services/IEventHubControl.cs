@@ -38,6 +38,16 @@ public interface IEventHubControl
         where TMessage : class;
     
     /// <summary>
+    ///     Registers a handler for a routed event message bound to a topic exchange with the specified routing key.
+    /// </summary>
+    /// <param name="exchangeName">Name of the topic exchange to bind to</param>
+    /// <param name="routingKey">Routing key pattern for filtering messages</param>
+    /// <param name="handler">Handler for the message</param>
+    /// <typeparam name="TMessage">Type of incoming message</typeparam>
+    EndpointHandle RegisterRoutedEventConsumer<TMessage>(string exchangeName, string routingKey,
+        Func<TMessage, Task> handler) where TMessage : class;
+
+    /// <summary>
     ///     Registers a handler for a command message with the specified command name.
     /// </summary>
     /// <param name="commandName"></param>

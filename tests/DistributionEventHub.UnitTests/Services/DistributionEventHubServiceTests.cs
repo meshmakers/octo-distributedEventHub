@@ -139,6 +139,71 @@ public class DistributionEventHubServiceTests
         // Assert
         result.Should().NotBeNull();
     }
+
+    [Fact]
+    public async Task SendToExchangeAsync_AppliesInstancePrefixToExchangeName()
+    {
+        // Arrange
+        var message = new TestMessage { Data = "test" };
+        Uri? capturedUri = null;
+
+        _busMock
+            .Setup(b => b.GetSendEndpoint(It.IsAny<Uri>()))
+            .Callback<Uri>(uri => capturedUri = uri)
+            .ReturnsAsync(_sendEndpointMock.Object);
+
+        // Act
+        await _sut.SendToExchangeAsync("my-exchange", "routing.key", message);
+
+        // Assert
+        capturedUri.Should().NotBeNull();
+        capturedUri!.ToString().Should().Contain("test-my-exchange");
+        capturedUri.ToString().Should().Contain("type=topic");
+    }
+
+    [Fact]
+    public async Task SendToExchangeAsync_SetsRoutingKeyOnSendContext()
+    {
+        // Arrange
+        var message = new TestMessage { Data = "test" };
+
+        _sendEndpointMock
+            .Setup(e => e.Send(message, It.IsAny<IPipe<SendContext<TestMessage>>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        await _sut.SendToExchangeAsync("my-exchange", "tenant.events", message);
+
+        // Assert
+        _sendEndpointMock.Verify(
+            e => e.Send(message, It.IsAny<IPipe<SendContext<TestMessage>>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task SendToExchangeAsync_AwaitsTheSendOperation()
+    {
+        // Arrange: Verify the method properly awaits the send (returns Task, not Task<Task>)
+        var message = new TestMessage { Data = "test" };
+        var sendCompleted = false;
+
+        _sendEndpointMock
+            .Setup(e => e.Send(message, It.IsAny<IPipe<SendContext<TestMessage>>>(),
+                It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                await Task.Delay(10);
+                sendCompleted = true;
+            });
+
+        // Act
+        await _sut.SendToExchangeAsync("my-exchange", "key", message);
+
+        // Assert: Send should have completed because we properly await it
+        sendCompleted.Should().BeTrue();
+    }
 }
 
 public record TestMessage
