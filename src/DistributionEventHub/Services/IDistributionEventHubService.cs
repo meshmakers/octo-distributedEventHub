@@ -42,4 +42,16 @@ public interface IDistributionEventHubService
     /// <param name="scheduleGroup">Group of the schedule</param>
     /// <returns></returns>
     Task CancelScheduledRecurringSendAsync(string scheduleId, string scheduleGroup);
+
+    /// <summary>
+    ///     Send a message to a topic exchange with a specific routing key
+    /// </summary>
+    /// <param name="exchangeName">Name of the topic exchange</param>
+    /// <param name="routingKey">Routing key for the message</param>
+    /// <param name="message">Message to send</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <typeparam name="T">Type of message</typeparam>
+    /// <returns></returns>
+    Task SendToExchangeAsync<T>(string exchangeName, string routingKey, T message,
+        CancellationToken? cancellationToken = null) where T : class;
 }
