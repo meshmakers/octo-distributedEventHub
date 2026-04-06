@@ -52,6 +52,6 @@ public interface IDistributionEventHubService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <typeparam name="T">Type of message</typeparam>
     /// <returns></returns>
-    Task<Task> SendToExchangeAsync<T>(string exchangeName, string routingKey, T message,
+    Task SendToExchangeAsync<T>(string exchangeName, string routingKey, T message,
         CancellationToken? cancellationToken = null) where T : class;
 }
