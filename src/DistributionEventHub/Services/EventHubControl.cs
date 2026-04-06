@@ -56,7 +56,16 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
     {
         var prefixedExchangeName = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, exchangeName);
         var sanitizedRoutingKey = routingKey.Replace(".", "-").Replace("#", "_").Replace("*", "_").Replace("/", "-").Replace("@", "-");
-        var queueName = $"{prefixedExchangeName}-{sanitizedRoutingKey}-{Guid.NewGuid():N}";
+        var guidSuffix = Guid.NewGuid().ToString("N");
+        var queueName = $"{prefixedExchangeName}-{sanitizedRoutingKey}-{guidSuffix}";
+        // RabbitMQ queue names are limited to 255 bytes.
+        if (queueName.Length > 255)
+        {
+            throw new ArgumentException(
+                $"Resulting queue name exceeds the RabbitMQ limit of 255 characters " +
+                $"(got {queueName.Length}). Shorten the exchange name or routing key.",
+                nameof(routingKey));
+        }
 
         var handle = busControl.ConnectReceiveEndpoint(queueName,
             e =>
