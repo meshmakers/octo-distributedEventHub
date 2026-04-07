@@ -98,6 +98,17 @@ public static class ServiceCollectionExtensions
 
         configuration.ConfigureMassTransit(x =>
         {
+            if (!configuration.AutomaticallyStartBusDuringStartup)
+            {
+                // When the bus is started on-demand (not at startup), exclude the "ready" tag
+                // from the MassTransit health check so it does not block Kubernetes readiness probes.
+                x.ConfigureHealthCheckOptions(options =>
+                {
+                    options.Tags.Clear();
+                    options.Tags.Add("masstransit");
+                });
+            }
+
             var prefixedSchedulerAddress = CacheCommon.ApplyInstancePrefixToUri(configuration.InstancePrefix,
                 new Uri(configuration.SchedulerEndpointAddress));
             x.AddMessageScheduler(prefixedSchedulerAddress);
