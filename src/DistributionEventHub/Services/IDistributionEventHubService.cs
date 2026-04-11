@@ -54,4 +54,18 @@ public interface IDistributionEventHubService
     /// <returns></returns>
     Task SendToExchangeAsync<T>(string exchangeName, string routingKey, T message,
         CancellationToken? cancellationToken = null) where T : class;
+
+    /// <summary>
+    ///     Send a command to a specific address and await the response
+    /// </summary>
+    /// <param name="commandAddress">Address to send the command to</param>
+    /// <param name="request">The request message</param>
+    /// <param name="cancellationToken">An optional cancellation token</param>
+    /// <param name="timeout">An optional timeout for the request</param>
+    /// <typeparam name="TRequest">Type of request message</typeparam>
+    /// <typeparam name="TResponse">Type of response message</typeparam>
+    /// <returns>The response message</returns>
+    Task<TResponse> GetCommandResponseAsync<TRequest, TResponse>(string commandAddress, TRequest request,
+        CancellationToken cancellationToken = default, TimeSpan? timeout = default)
+        where TRequest : class where TResponse : class;
 }

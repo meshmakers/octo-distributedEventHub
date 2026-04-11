@@ -46,4 +46,27 @@ internal class DistributionEventHubService(IBus bus, IBroadcastServiceAddress se
         await endpoint.Send(message, context => { context.SetRoutingKey(routingKey); },
             cancellationToken ?? CancellationToken.None).ConfigureAwait(false);
     }
+
+    public async Task<TResponse> GetCommandResponseAsync<TRequest, TResponse>(string commandAddress, TRequest request,
+        CancellationToken cancellationToken = default, TimeSpan? timeout = default)
+        where TRequest : class where TResponse : class
+    {
+        var requestTimeout = timeout ?? RequestTimeout.Default;
+        try
+        {
+            var prefixedCommandAddress = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, commandAddress);
+            var requestClient = bus.CreateRequestClient<TRequest>(new Uri($"exchange:{prefixedCommandAddress}?temporary=true"), requestTimeout);
+            var response = await requestClient.GetResponse<TResponse>(request, cancellationToken, requestTimeout)
+                .ConfigureAwait(false);
+            return response.Message;
+        }
+        catch (RequestTimeoutException e)
+        {
+            throw DistributionTimeoutException.Create(typeof(TRequest).Name, requestTimeout, e);
+        }
+        catch (Exception e)
+        {
+            throw DistributedOperationFailedException.CreateCommandFailed(typeof(TRequest).Name, e);
+        }
+    }
 }
