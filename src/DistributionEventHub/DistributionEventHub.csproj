@@ -21,8 +21,8 @@
 
     <ItemGroup>
         <PackageReference Include="Meshmakers.Common.Shared" Version="$(MeshmakerVersion)" />
-        <PackageReference Include="MassTransit.RabbitMQ" Version="9.1.0" />
-        <PackageReference Include="MassTransit.Hangfire" Version="9.1.0" />
+        <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.9" />
+        <PackageReference Include="MassTransit.Hangfire" Version="8.5.9" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.7" />
         <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.7" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
