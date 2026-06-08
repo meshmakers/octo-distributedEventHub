@@ -33,7 +33,11 @@ internal class RoutedCommandClient<TRequest> : IRoutedCommandClient<TRequest> wh
         try
         {
             var prefixedCommandAddress = CacheCommon.ApplyInstancePrefix(_serviceAddress.InstancePrefix, commandAddress);
-            var requestClient = _bus.CreateRequestClient<TRequest>(new Uri($"exchange:{prefixedCommandAddress}?temporary=true"), requestTimeout);
+            // durable=false&autodelete=false (not temporary): a temporary exchange is auto-delete, and the
+            // receive endpoint queue inherits the exchange flags — MassTransit then forces the queue
+            // exclusive (AutoDelete && !Durable), which is what caused the RESOURCE_LOCKED storm. These flags
+            // must stay in sync with the consumer in EventHubControl.RegisterCommandConsumer.
+            var requestClient = _bus.CreateRequestClient<TRequest>(new Uri($"exchange:{prefixedCommandAddress}?durable=false&autodelete=false"), requestTimeout);
             var response = await requestClient.GetResponse<TResponse>(message, cancellationToken, requestTimeout)
                 .ConfigureAwait(false);
             return response.Message;

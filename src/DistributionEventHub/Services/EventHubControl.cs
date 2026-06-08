@@ -116,13 +116,22 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
             {
                 if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
                 {
+                    // MassTransit's topology builder forces a queue exclusive whenever
+                    // (AutoDelete && !Durable) — so the previous AutoDelete=true/Durable=false combo
+                    // declared this queue exclusive regardless of Exclusive=false, which is what caused
+                    // the chronic RESOURCE_LOCKED storm: on every reconnect the fresh connection could
+                    // not re-declare the queue still owned by the not-yet-reaped previous connection.
+                    // Dropping AutoDelete keeps the queue non-exclusive (re-declarable on reconnect) and
+                    // lets it survive the brief reconnect gap, buffering in-flight requests instead of
+                    // losing them. The sender exchange flags must match (durable=false, autodelete=false)
+                    // — see DistributionEventHubService and RoutedCommandClient.
                     rabbitConfigurator.Durable = false;
-                    rabbitConfigurator.AutoDelete = true;
+                    rabbitConfigurator.AutoDelete = false;
                     rabbitConfigurator.Exclusive = false;
-                    // Single-active-consumer keeps the "exactly one adapter handles this command"
-                    // guarantee without an exclusive queue: on reconnect the new consumer attaches
-                    // immediately (no RESOURCE_LOCKED) and the broker promotes it once the old owner
-                    // is reaped — clean failover instead of a lock-retry storm.
+                    // Single-active-consumer preserves the "exactly one adapter handles this command"
+                    // guarantee on a shared (non-exclusive) queue: the reconnecting consumer attaches
+                    // immediately and the broker promotes it once the old owner drains — clean failover
+                    // instead of a lock-retry storm.
                     rabbitConfigurator.SetQueueArgument("x-single-active-consumer", true);
                 }
 
