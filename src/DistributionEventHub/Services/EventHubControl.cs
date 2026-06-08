@@ -26,6 +26,14 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
         var handle = busControl.ConnectReceiveEndpoint(prefixedDestinationAddress,
             e =>
             {
+                if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
+                {
+                    // Never exclusive: a connection-locked queue cannot be re-declared on
+                    // reconnect/redeploy/instance-overlap and turns transient blips into
+                    // RESOURCE_LOCKED retry loops that mask the real fault.
+                    rabbitConfigurator.Exclusive = false;
+                }
+
                 e.Handler<TMessage>(async consumeContext =>
                 {
                     await handler(consumeContext.Message).ConfigureAwait(false);
@@ -42,6 +50,11 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
         var handle = busControl.ConnectReceiveEndpoint(queueName,
             e =>
             {
+                if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
+                {
+                    rabbitConfigurator.Exclusive = false;
+                }
+
                 e.Handler<TMessage>(async consumeContext =>
                 {
                     await handler(consumeContext.Message).ConfigureAwait(false);
@@ -76,6 +89,7 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
                 {
                     rabbitConfigurator.AutoDelete = true;
                     rabbitConfigurator.Durable = false;
+                    rabbitConfigurator.Exclusive = false;
 
                     rabbitConfigurator.Bind(prefixedExchangeName, bindConfig =>
                     {
@@ -103,9 +117,15 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
                 if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
                 {
                     rabbitConfigurator.Durable = false;
-                    rabbitConfigurator.AutoDelete = true; 
+                    rabbitConfigurator.AutoDelete = true;
+                    rabbitConfigurator.Exclusive = false;
+                    // Single-active-consumer keeps the "exactly one adapter handles this command"
+                    // guarantee without an exclusive queue: on reconnect the new consumer attaches
+                    // immediately (no RESOURCE_LOCKED) and the broker promotes it once the old owner
+                    // is reaped — clean failover instead of a lock-retry storm.
+                    rabbitConfigurator.SetQueueArgument("x-single-active-consumer", true);
                 }
-                
+
                 e.Handler<TMessage>(async consumeContext =>
                 {
                     async Task RespondToCommand(object response)
