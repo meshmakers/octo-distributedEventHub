@@ -128,6 +128,26 @@ public class CommandConsumerTopologyTests : IAsyncLifetime
         response.Reply.Should().Be("Echo: ping");
     }
 
+    [Fact]
+    public async Task RegisterRoutedEventConsumer_TopicQueue_IsNonExclusive()
+    {
+        // The pub/sub leg of FromPipelineDataEvent. Per-subscriber GUID-named queues bound to a topic
+        // exchange; they must be non-exclusive so the same endpoint can re-declare them after a transport
+        // reconnect without RESOURCE_LOCKED.
+        var exchange = $"topic-excl-{Guid.NewGuid():N}";
+        var provider = await CreateStartedProviderAsync("TopicExclusiveService");
+        var hub = provider.GetRequiredService<IEventHubControl>();
+
+        await using var handle = hub.RegisterRoutedEventConsumer<TestCommand>(exchange, "pipeline.123",
+            _ => Task.CompletedTask);
+
+        // Queue name is {prefix}-{exchange}-{routingKey}-{guid}; locate it by its unique exchange segment.
+        var queue = await WaitForAnyQueueAsync($"{_instancePrefix.ToLower()}-{exchange}", TimeSpan.FromSeconds(15));
+
+        queue.Exclusive.Should().BeFalse(
+            "a per-subscriber topic queue must be re-declarable on reconnect — an exclusive one causes RESOURCE_LOCKED");
+    }
+
     private async Task<ServiceProvider> CreateStartedProviderAsync(string uniqueServiceAddress)
     {
         var services = new ServiceCollection();
@@ -178,6 +198,45 @@ public class CommandConsumerTopologyTests : IAsyncLifetime
             $"Queue '{queueName}' did not reach the expected state within {timeout.TotalSeconds}s (last seen: {state}).");
     }
 
+    private async Task<QueueInfo> WaitForAnyQueueAsync(string namePart, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var match = (await ListQueuesAsync()).FirstOrDefault(q => q.Name.Contains(namePart));
+            if (match != null)
+            {
+                return match;
+            }
+
+            await Task.Delay(200);
+        }
+
+        throw new TimeoutException($"No queue whose name contains '{namePart}' appeared within {timeout.TotalSeconds}s.");
+    }
+
+    private async Task<IReadOnlyList<QueueInfo>> ListQueuesAsync()
+    {
+        var url = $"http://{_rabbitMq.Host}:{_rabbitMq.ManagementPort}/api/queues/%2F";
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic",
+            Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_rabbitMq.Username}:{_rabbitMq.Password}")));
+
+        using var response = await HttpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        using var doc = await JsonDocument.ParseAsync(stream);
+
+        var result = new List<QueueInfo>();
+        foreach (var element in doc.RootElement.EnumerateArray())
+        {
+            result.Add(ParseQueue(element));
+        }
+
+        return result;
+    }
+
     private async Task<QueueInfo?> TryGetQueueAsync(string queueName)
     {
         // RabbitMQ HTTP management API: vhost "/" must be URL-encoded as %2F.
@@ -196,8 +255,12 @@ public class CommandConsumerTopologyTests : IAsyncLifetime
 
         await using var stream = await response.Content.ReadAsStreamAsync();
         using var doc = await JsonDocument.ParseAsync(stream);
-        var root = doc.RootElement;
+        return ParseQueue(doc.RootElement);
+    }
 
+    private static QueueInfo ParseQueue(JsonElement root)
+    {
+        var name = root.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
         var exclusive = root.GetProperty("exclusive").GetBoolean();
         var consumers = root.TryGetProperty("consumers", out var c) ? c.GetInt32() : 0;
 
@@ -210,7 +273,7 @@ public class CommandConsumerTopologyTests : IAsyncLifetime
             }
         }
 
-        return new QueueInfo(exclusive, consumers, arguments);
+        return new QueueInfo(name, exclusive, consumers, arguments);
     }
 
     // The management API may serialize a boolean queue argument as JSON true or as the string "true".
@@ -218,7 +281,7 @@ public class CommandConsumerTopologyTests : IAsyncLifetime
         value.ValueKind == JsonValueKind.True
         || (value.ValueKind == JsonValueKind.String && string.Equals(value.GetString(), "true", StringComparison.OrdinalIgnoreCase));
 
-    private sealed record QueueInfo(bool Exclusive, int Consumers, Dictionary<string, JsonElement> Arguments);
+    private sealed record QueueInfo(string Name, bool Exclusive, int Consumers, Dictionary<string, JsonElement> Arguments);
 }
 
 public record TestCommand
