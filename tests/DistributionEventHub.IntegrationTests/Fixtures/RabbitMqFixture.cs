@@ -9,6 +9,12 @@ public class RabbitMqFixture : IAsyncLifetime
 
     public string Host => _container.Hostname;
     public int Port => _container.GetMappedPublicPort(5672);
+
+    /// <summary>
+    /// Mapped host port of the RabbitMQ HTTP management API (container port 15672).
+    /// Used by topology tests to inspect declared queue properties (exclusive flag, arguments).
+    /// </summary>
+    public int ManagementPort => _container.GetMappedPublicPort(15672);
     public string Username => "guest";
     public string Password => "guest";
 
@@ -17,6 +23,7 @@ public class RabbitMqFixture : IAsyncLifetime
         _container = new RabbitMqBuilder("rabbitmq:3-management")
             .WithUsername("guest")
             .WithPassword("guest")
+            .WithPortBinding(15672, true)
             .Build();
     }
 
