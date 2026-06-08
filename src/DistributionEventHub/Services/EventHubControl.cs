@@ -87,8 +87,15 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
 
                 if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
                 {
+                    // Durable=true is required to keep the queue non-exclusive: MassTransit forces a queue
+                    // exclusive whenever (AutoDelete && !Durable), and an exclusive queue cannot be
+                    // re-declared by the same endpoint after a transport reconnect until the broker reaps
+                    // the previous owner — exactly the RESOURCE_LOCKED loop seen on these per-subscriber
+                    // (GUID-named) topic queues. AutoDelete stays true so the queue is removed once its
+                    // consumer goes away. No single-active-consumer here: this is pub/sub fan-out, every
+                    // subscriber instance gets its own copy.
                     rabbitConfigurator.AutoDelete = true;
-                    rabbitConfigurator.Durable = false;
+                    rabbitConfigurator.Durable = true;
                     rabbitConfigurator.Exclusive = false;
 
                     rabbitConfigurator.Bind(prefixedExchangeName, bindConfig =>
