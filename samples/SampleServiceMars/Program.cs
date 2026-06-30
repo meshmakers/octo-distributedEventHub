@@ -41,7 +41,7 @@ public class Program
                     //     .MongoDbRepository(r =>
                     //     {
                     //         r.Connection =
-                    //             "mongodb://octo-system-admin:REDACTED-LOCAL-DEV-PASSWORD@localhost:27017/?authSource=admin&readPreference=primary&directConnection=true&ssl=false";
+                    //             "mongodb://octo-system-admin:<password>@localhost:27017/?authSource=admin&readPreference=primary&directConnection=true&ssl=false";
                     //         r.DatabaseName = "orderdb";
                     //     });
                 });
