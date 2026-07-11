@@ -124,6 +124,18 @@ public static class ServiceCollectionExtensions
 
                     cfg.UseMessageScheduler(prefixedSchedulerAddress);
 
+                    // Bounded in-process retry for every consumer so a transient failure (e.g. the
+                    // identity CK not yet imported at cold start, or a brief MongoDB blip) is retried
+                    // instead of faulting the message on the first error. OctoMesh consumers are
+                    // idempotent by design, so re-processing is safe. Longer outages are covered by the
+                    // durable tenant-lifecycle reconciler rather than by holding the message here
+                    // (AB#4348 Phase 5).
+                    cfg.UseMessageRetry(r =>
+                        r.Intervals(
+                            TimeSpan.FromSeconds(1),
+                            TimeSpan.FromSeconds(5),
+                            TimeSpan.FromSeconds(15)));
+
                     cfg.MessageTopology.SetEntityNameFormatter(
                         new PrefixEntityNameFormatter(cfg.MessageTopology.EntityNameFormatter,
                             CacheCommon.GetInstancePrefix(configuration.InstancePrefix)));
