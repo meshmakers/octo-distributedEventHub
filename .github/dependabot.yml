@@ -9,3 +9,7 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+    ignore:
+      # MassTransit stays on the 8.x line (AB#4869: v9 is commercial).
+      - dependency-name: "MassTransit.*"
+        update-types: ["version-update:semver-major"]
