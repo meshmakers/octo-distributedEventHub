@@ -24,7 +24,7 @@ This is a distributed event system for OctoMesh services built on **MassTransit*
 ### Project Structure
 
 - `src/DistributionEventHub` - Core library (NuGet: `Meshmakers.Octo.Common.DistributionEventHub`)
-  - Multi-targets: `net10.0` and `netstandard2.0`
+  - Targets `net10.0` only
 - `src/DistributionEventHub.MongoDB` - MongoDB GridFS integration for file caching
 - `samples/` - Example services demonstrating usage patterns
 

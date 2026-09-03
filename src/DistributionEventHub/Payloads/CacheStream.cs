@@ -8,39 +8,15 @@ public record CacheStream
     /// <summary>
     ///     The content type of the stream
     /// </summary>
-    public string ContentType
-    {
-        get;
-#if !NETSTANDARD2_0
-        init;
-#else
-        set;
-#endif
-    } = string.Empty;
+    public string ContentType { get; init; } = string.Empty;
 
     /// <summary>
     ///     The stream as byte array
     /// </summary>
-    public Stream Stream
-    {
-        get;
-#if !NETSTANDARD2_0
-        init;
-#else
-        set;
-#endif
-    } = null!;
+    public Stream Stream { get; init; } = null!;
 
     /// <summary>
     ///     The original file name
     /// </summary>
-    public string FileName
-    {
-        get;
-#if !NETSTANDARD2_0
-        init;
-#else
-        set;
-#endif
-    } = string.Empty;
+    public string FileName { get; init; } = string.Empty;
 }

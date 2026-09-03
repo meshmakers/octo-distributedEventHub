@@ -26,13 +26,16 @@ public class RepositoryClient : IRepositoryClient
 
         var urlBuilder = new MongoUrlBuilder();
 
+        // RepositoryHost may carry a port suffix ("host:port"). MongoServerAddress.Parse handles
+        // that; the MongoServerAddress(string host) constructor rejects it since MongoDB.Driver
+        // 3.11.1 (CSHARP-6171 host validation).
         if (_options.RepositoryHost.Contains(','))
         {
-            urlBuilder.Servers = _options.RepositoryHost.Split(',').Select(x => new MongoServerAddress(x));
+            urlBuilder.Servers = _options.RepositoryHost.Split(',').Select(MongoServerAddress.Parse);
         }
         else
         {
-            urlBuilder.Server = new MongoServerAddress(_options.RepositoryHost);
+            urlBuilder.Server = MongoServerAddress.Parse(_options.RepositoryHost);
         }
 
         if (!string.IsNullOrWhiteSpace(_options.RepositoryUser)

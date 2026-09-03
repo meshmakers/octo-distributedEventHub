@@ -52,91 +52,35 @@ public record RecurringSchedulingOptions
     /// <summary>
     /// The Cron Schedule Expression in Cron Syntax
     /// </summary>
-    public string CronExpression
-    {
-        get;
-#if !NETSTANDARD2_0
-        init;
-#else
-        set;
-#endif
-    }
+    public string CronExpression { get; init; }
 
     /// <summary>
     /// The time the recurring schedule is enabled
     /// </summary>
-    public DateTime StartTime
-    {
-        get;
-#if !NETSTANDARD2_0
-        init;
-#else
-        set;
-#endif
-    }
+    public DateTime StartTime { get; init; }
 
     /// <summary>
     /// The time the recurring schedule is disabled
     /// If null then the job is repeated forever
     /// </summary>
-    public DateTime? EndTime 
-    {
-        get;
-#if !NETSTANDARD2_0
-        init;
-#else
-        set;
-#endif
-    } 
+    public DateTime? EndTime { get; init; }
 
     /// <summary>
     /// A unique name that identifies this schedule. 
     /// </summary>
-    public string ScheduleId 
-    {
-        get;
-#if !NETSTANDARD2_0
-        init;
-#else
-        set;
-#endif
-    }
+    public string ScheduleId { get; init; }
 
     /// <summary>
     /// Description of the schedule
     /// </summary>
-    public string ScheduleGroup    
-    {
-        get;
-#if !NETSTANDARD2_0
-        init;
-#else
-        set;
-#endif
-    }
+    public string ScheduleGroup { get; init; }
     /// <summary>
     /// Description of the schedule
     /// </summary>
-    public string Description     
-    {
-        get;
-#if !NETSTANDARD2_0
-        init;
-#else
-        set;
-#endif
-    }
+    public string Description { get; init; }
     /// <summary>
     /// If the scheduler is offline and comes back online, the policy determines how
     /// a missed scheduled message is handled.
     /// </summary>
-    public SchedulingMissedEventPolicy MisfirePolicy 
-    {
-        get;
-#if !NETSTANDARD2_0
-        init;
-#else
-        set;
-#endif
-    }
+    public SchedulingMissedEventPolicy MisfirePolicy { get; init; }
 }
