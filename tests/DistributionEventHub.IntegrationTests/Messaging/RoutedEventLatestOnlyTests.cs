@@ -4,6 +4,7 @@ using Meshmakers.Octo.Common.DistributionEventHub.Configuration.Options;
 using Meshmakers.Octo.Common.DistributionEventHub.IntegrationTests.Fixtures;
 using Meshmakers.Octo.Common.DistributionEventHub.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Testcontainers.RabbitMq;
 using Xunit;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.IntegrationTests.Messaging;
@@ -166,6 +167,58 @@ public class RoutedEventLatestOnlyTests(RabbitMqFixture rabbitMq)
     }
 
     [Fact]
+    public async Task BacklogInAQuorumQueue_IsHandledOnceWithTheNewestTick()
+    {
+        // Review of AB#5709: queue.declare-ok's message-count must exclude the unacknowledged delivery for
+        // quorum queues as well, otherwise the newest tick would be skipped (lost run). Producers and
+        // consumers declare the queue without arguments, so a quorum queue only arises from the vhost's
+        // default queue type — reproduced here on a dedicated broker so the shared one stays classic.
+        await using var broker = new RabbitMqBuilder("rabbitmq:3-management")
+            .WithUsername(rabbitMq.Username)
+            .WithPassword(rabbitMq.Password)
+            .Build();
+        await broker.StartAsync(TestContext.Current.CancellationToken);
+        var result = await broker.ExecAsync(
+            ["rabbitmqctl", "update_vhost_metadata", "/", "--default-queue-type", "quorum"],
+            TestContext.Current.CancellationToken);
+        result.ExitCode.Should().Be(0, result.Stderr);
+
+        await using var host = await StartHostAsync(broker.Hostname, broker.GetMappedPublicPort(5672));
+        const string queue = "latest-only-quorum";
+        for (var i = 1; i <= 10; i++)
+        {
+            await SendInOrderAsync(host, new Uri($"queue:{queue}"), new Tick(i));
+        }
+
+        await Task.Delay(1000, TestContext.Current.CancellationToken);
+        var queueType = await broker.ExecAsync(["rabbitmqctl", "list_queues", "name", "type"],
+            TestContext.Current.CancellationToken);
+        queueType.Stdout.Should().MatchRegex($@"{queue}\s+quorum", "the precondition of this test");
+
+        var handled = new ConcurrentQueue<(Tick Tick, RoutedEventDeliveryContext Delivery)>();
+        var handle = host.Control.RegisterRoutedEventConsumer<Tick>(queue,
+            (tick, delivery) =>
+            {
+                handled.Enqueue((tick, delivery));
+                return Task.CompletedTask;
+            }, RoutedEventConsumerOptions.LatestOnly);
+
+        try
+        {
+            await TestHelpers.WaitForCondition(() => !handled.IsEmpty, TimeSpan.FromSeconds(15));
+            await Task.Delay(2000, TestContext.Current.CancellationToken);
+
+            handled.Should().ContainSingle();
+            handled.Single().Tick.Sequence.Should().Be(10);
+            handled.Single().Delivery.CoalescedMessageCount.Should().Be(9);
+        }
+        finally
+        {
+            await handle.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task DefaultOptions_HandleEveryMessage()
     {
         await using var host = await StartHostAsync();
@@ -216,15 +269,15 @@ public class RoutedEventLatestOnlyTests(RabbitMqFixture rabbitMq)
         }
     }
 
-    private async Task<TestHost> StartHostAsync()
+    private async Task<TestHost> StartHostAsync(string? brokerHost = null, int? brokerPort = null)
     {
         var services = new ServiceCollection();
         services.AddLogging();
         services.Configure<DistributionEventHubOptions>(o =>
         {
             o.InstancePrefix = $"latest-only-{Guid.NewGuid():N}";
-            o.BrokerHost = rabbitMq.Host;
-            o.BrokerPort = (ushort)rabbitMq.Port;
+            o.BrokerHost = brokerHost ?? rabbitMq.Host;
+            o.BrokerPort = (ushort)(brokerPort ?? rabbitMq.Port);
             o.BrokerUser = rabbitMq.Username;
             o.BrokerPassword = rabbitMq.Password;
         });

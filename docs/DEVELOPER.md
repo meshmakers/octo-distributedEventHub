@@ -549,7 +549,26 @@ migration. (Producers that send to `queue:<name>` declare the queue too, without
 Limits: the guarantee is per receive endpoint, i.e. per consumer process. Several processes consuming the
 same queue each run one message at a time. `CoalescePendingMessages` requires a prefetch count and
 concurrency limit of 1 (validated; `ArgumentException` otherwise) because prefetched messages are not
-counted as waiting by the broker.
+counted as waiting by the broker. With N competing consumers the tail of a backlog can therefore still
+produce up to N runs (one per consumer, in parallel), e.g. briefly during a rolling update.
+
+Further notes from the AB#5709 review:
+
+- `message-count` of `queue.declare-ok` is the number of **ready** messages; the delivery being decided
+  on is unacknowledged and not included — for classic and for quorum queues (covered by
+  `BacklogInAQuorumQueue_IsHandledOnceWithTheNewestTick`). Since both sides declare the queue without
+  arguments, a quorum queue only arises from the vhost's default queue type. For quorum queues the count
+  comes from the leader's state and could in theory be stale right after a leader change; the worst case
+  is one skipped tick that the next tick makes up for.
+- A delivery is only skipped while a newer message is still in the queue, and nothing is acknowledged
+  before the handler finishes, so a crash never loses the last tick: the unacknowledged delivery is
+  requeued and coalesced against whatever is waiting when it is redelivered (at worst one extra run).
+- The count is read through MassTransit's RabbitMQ payloads (`ChannelContext`, `ReceiveSettings`). If a
+  MassTransit upgrade removes them, coalescing silently falls back to handling every message (still one
+  at a time). `RoutedEventLatestOnlyTests` (RabbitMQ Testcontainer) is the guard for such upgrades.
+- A passive declare of a missing queue closes the channel (404). The queue being consumed always exists,
+  unless it is deleted while the consumer runs — then RabbitMQ cancels the consumer anyway and MassTransit
+  recovers the channel and endpoint.
 
 Note on `SchedulingMissedEventPolicy`: MassTransit.Hangfire 8.5.x registers recurring jobs with only a
 time zone (`RecurringJobOptions { TimeZone }`); the misfire policy is not passed to Hangfire. It would only

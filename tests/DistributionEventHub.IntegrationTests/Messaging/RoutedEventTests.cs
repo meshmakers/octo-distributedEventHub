@@ -138,7 +138,11 @@ public class TestRoutedConsumer : IDistributedConsumer<TestRoutedMessage>
 
     public Task ConsumeAsync(IDistributedContext<TestRoutedMessage> context)
     {
-        _receivedMessages.Add(new ReceivedRoutedMessage(context.Message.Id, DateTime.UtcNow));
+        // Consumers run concurrently (default prefetch, two buses): List<T>.Add is not thread-safe and can drop an entry.
+        lock (_receivedMessages)
+        {
+            _receivedMessages.Add(new ReceivedRoutedMessage(context.Message.Id, DateTime.UtcNow));
+        }
         return Task.CompletedTask;
     }
 }
