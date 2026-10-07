@@ -135,7 +135,16 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
 
         _busConfigurator.AddPublishMessageScheduler();
 
-        _busConfigurator.AddHangfireConsumers();
+        // AB#5867: the scheduler endpoint is instance-scoped. MassTransit's HangfireEndpointDefinition
+        // ignores the endpoint name formatter, so without this every instance consumed the same
+        // "hangfire" queue and a schedule could be stored by another instance's bot service, where
+        // RemoveRecurringJobsByScheduleGroup never reaches it. Read lazily: InstancePrefix may still be
+        // set after this call.
+        _busConfigurator.AddHangfireConsumers(o => o.QueueName = HangfireSchedulerTopology.GetQueueName(InstancePrefix));
+        serviceCollection.AddBusObserver(sp => new LegacyHangfireSchedulerBindingRemover(
+            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<RabbitMqTransportOptions>>(),
+            () => InstancePrefix,
+            sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LegacyHangfireSchedulerBindingRemover>>()));
     }
 
     internal void ConfigureMassTransit(Action<IBusRegistrationConfigurator> action)

@@ -15,7 +15,7 @@ dotnet build Octo.DistributedEventHub.sln -c Release
 dotnet build Octo.DistributedEventHub.sln -c DebugL
 ```
 
-There are no unit tests in this repository.
+Unit tests: `tests/DistributionEventHub.UnitTests`; integration tests (Testcontainers RabbitMQ/MongoDB, Docker required): `tests/DistributionEventHub.IntegrationTests`.
 
 ## Architecture Overview
 
@@ -65,6 +65,18 @@ services.AddDistributionEventHub(config =>
 All queue/exchange names are prefixed with `InstancePrefix` (default: "default") to isolate environments sharing the same RabbitMQ cluster. Can be set via:
 - `DistributionEventHubOptions.InstancePrefix` in appsettings.json
 - `config.InstancePrefix` in code (takes precedence)
+
+**Hangfire scheduler queue (AB#5867).** MassTransit's `HangfireEndpointDefinition` ignores the endpoint
+name formatter, so the scheduler queue was the un-prefixed `hangfire` in every instance while the
+scheduling exchanges bound into it are prefixed. Two instances on one broker (test-2 `main` + `dev`)
+consumed it as competing consumers and stored each other's recurring jobs in the wrong Hangfire database,
+where `RemoveRecurringJobsByScheduleGroup` never reaches them (doubled cron ticks, jobs surviving
+`UndeployTriggers`). `AddHangfireMessageScheduler` now sets the queue to `{prefix}-hangfire`, and
+`LegacyHangfireSchedulerBindingRemover` (bus observer, `PreStart`) unbinds this instance's
+`{prefix}-MassTransit.Scheduling:*` exchanges from the legacy `hangfire` exchange — other instances'
+bindings stay, so a not yet updated instance keeps working. Jobs that already landed in a foreign
+Hangfire database are not moved; remove them there by hand. Tests:
+`UnitTests/Configuration/HangfireSchedulerTopologyTests`, `IntegrationTests/Messaging/HangfireSchedulerIsolationTests`.
 
 ### Dependencies
 
