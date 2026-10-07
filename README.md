@@ -38,6 +38,11 @@ config.AddRoutedEventConsumer<DataProcessConsumer, ProcessDataEvent>("data-proce
 await eventHub.SendAsync(new Uri("queue:data-processor"), processEvent);
 ```
 
+Runtime registrations (`IEventHubControl.RegisterRoutedEventConsumer`) accept `RoutedEventConsumerOptions`
+for prefetch, concurrency and coalescing of a backlog. `RoutedEventConsumerOptions.LatestOnly` handles one
+message at a time and, of the messages that piled up while nobody consumed, only the newest — without any
+queue argument, so it works on existing durable queues (AB#5709, see `docs/DEVELOPER.md`).
+
 ### 3. CommandClient (Request/Response)
 **Implementation:** `CommandClient<TRequest>` & `RoutedCommandClient<TRequest>`
 - **Pattern:** RPC over temporary reply queues

@@ -28,6 +28,30 @@ public interface IEventHubControl
     /// <typeparam name="TMessage">Type of incoming message</typeparam>
     EndpointHandle RegisterRoutedEventConsumer<TMessage>(string destinationAddress, Func<TMessage, Task> handler)
         where TMessage : class;
+
+    /// <summary>
+    ///     Registers a handler for a routed event message with the specified destination address, with
+    ///     explicit consumption options (prefetch, concurrency, coalescing of a backlog — AB#5709).
+    /// </summary>
+    /// <param name="destinationAddress">destination address of the message (the queue name, without instance prefix)</param>
+    /// <param name="handler">Handler for the message; receives the delivery context as second argument</param>
+    /// <param name="options">Consumption options; see <see cref="RoutedEventConsumerOptions" /></param>
+    /// <typeparam name="TMessage">Type of incoming message</typeparam>
+    /// <remarks>
+    ///     The default implementation ignores <paramref name="options" /> and delegates to
+    ///     <see cref="RegisterRoutedEventConsumer{TMessage}(string, Func{TMessage, Task})" />, so existing
+    ///     implementations of this interface (test doubles) keep compiling. The event hub's own
+    ///     implementation honours the options.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The options contradict each other.</exception>
+    EndpointHandle RegisterRoutedEventConsumer<TMessage>(string destinationAddress,
+        Func<TMessage, RoutedEventDeliveryContext, Task> handler, RoutedEventConsumerOptions options)
+        where TMessage : class
+    {
+        options.Validate();
+        return RegisterRoutedEventConsumer<TMessage>(destinationAddress,
+            message => handler(message, RoutedEventDeliveryContext.None));
+    }
     
     /// <summary>
     ///     Registers a handler for a routed event message with the specified destination address.

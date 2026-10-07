@@ -514,6 +514,47 @@ public class ScheduledJobService
 }
 ```
 
+### Consuming recurring ticks: latest-only consumers (AB#5709)
+
+A recurring send is delivered into a **durable** queue. While its consumer is down, the ticks pile up,
+and a plain consumer then handles all of them at once — up to MassTransit's default prefetch
+(processor count × 2) in parallel. For periodic work (cron pipeline triggers) a backlog of N ticks is
+worth exactly one run. Register such consumers at runtime with `RoutedEventConsumerOptions.LatestOnly`:
+
+```csharp
+var handle = eventHubControl.RegisterRoutedEventConsumer<PipelineTriggerSchedule>(queueName,
+    async (tick, delivery) =>
+    {
+        // delivery.CoalescedMessageCount = older ticks that were skipped in favour of this one
+        await RunAsync(tick);
+    },
+    RoutedEventConsumerOptions.LatestOnly);
+```
+
+`LatestOnly` = `PrefetchCount = 1`, `ConcurrentMessageLimit = 1`, `CoalescePendingMessages = true`:
+
+- one message at a time — the handler never runs concurrently with itself on this endpoint;
+- before invoking the handler, the queue is passively declared on the consuming channel; if newer
+  messages are already waiting (`message-count > 0`), the delivery is acknowledged without invoking the
+  handler. A backlog of 20 ⇒ 19 skips + 1 handled message (the newest), and ticks that arrive while the
+  handler runs collapse into one follow-up run — the semantics of `x-max-length = 1` +
+  `x-overflow = drop-head`;
+- if the count cannot be read (non-RabbitMQ transport, broker error) the message is handled (fail open).
+
+**No queue arguments are involved.** Prefetch is channel QoS and the rest is decided in-process, so the
+options apply to existing durable queues as they are — no redeclare, no `PRECONDITION_FAILED`, no queue
+migration. (Producers that send to `queue:<name>` declare the queue too, without arguments; adding
+`x-max-length`/`x-message-ttl` as queue arguments on one side only would break the other.)
+
+Limits: the guarantee is per receive endpoint, i.e. per consumer process. Several processes consuming the
+same queue each run one message at a time. `CoalescePendingMessages` requires a prefetch count and
+concurrency limit of 1 (validated; `ArgumentException` otherwise) because prefetched messages are not
+counted as waiting by the broker.
+
+Note on `SchedulingMissedEventPolicy`: MassTransit.Hangfire 8.5.x registers recurring jobs with only a
+time zone (`RecurringJobOptions { TimeZone }`); the misfire policy is not passed to Hangfire. It would only
+concern ticks missed while the **scheduler** is down anyway — not ticks buffered while the consumer is down.
+
 ---
 
 ## Exception Handling
