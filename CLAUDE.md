@@ -17,6 +17,8 @@ dotnet build Octo.DistributedEventHub.sln -c DebugL
 
 Unit tests: `tests/DistributionEventHub.UnitTests`; integration tests (Testcontainers RabbitMQ/MongoDB, Docker required): `tests/DistributionEventHub.IntegrationTests`.
 
+CI (`azure-pipelines.yml`): `Build src and tests` builds `src/**` plus the `*Tests` projects once; `Test` then runs `dotnet test --no-build --no-restore` per project, sequentially (AB#6093). A new test project outside `tests/**/*Tests.csproj` must be added to the build step's project list.
+
 ## Architecture Overview
 
 This is a distributed event system for OctoMesh services built on **MassTransit** with **RabbitMQ** transport. The library provides type-safe APIs for four core messaging patterns.

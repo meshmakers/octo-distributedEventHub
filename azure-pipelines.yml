@@ -93,17 +93,25 @@ stages:
           - template: templates/steps/set-version.yml@pipelineTemplates
           - task: DotNetCoreCLI@2
             retryCountOnTaskFailure: 2
-            displayName: 'Build src'
+            # Builds the test projects too, so the Test step can run with
+            # --no-build --no-restore and no longer recompiles src + tests once per
+            # test project (AB#6093, same layout as octo-construction-kit-engine).
+            displayName: 'Build src and tests'
             inputs:
               command: 'build'
-              projects: 'src/**/*.csproj'
+              projects: |
+                src/**/*.csproj
+                tests/**/*Tests.csproj
+                !tests/**/*SystemTests.csproj
               arguments: '--configuration $(buildConfiguration) /p:OctoNugetPrivateServer=$(nugetPrivateServer)'
           - task: DotNetCoreCLI@2
             retryCountOnTaskFailure: 2
             displayName: 'Test'
             inputs:
               command: 'test'
-              arguments: '--configuration $(buildConfiguration) /p:OctoNugetPrivateServer=$(nugetPrivateServer)'
+              # One `dotnet test` per project, sequentially (DotNetCoreCLI default) —
+              # the integration tests use Testcontainers inside the DinD sidecar.
+              arguments: '--configuration $(buildConfiguration) --no-build --no-restore /p:OctoNugetPrivateServer=$(nugetPrivateServer)'
               projects: |
                 **/*Tests.csproj
                 !**/*SystemTests.csproj
