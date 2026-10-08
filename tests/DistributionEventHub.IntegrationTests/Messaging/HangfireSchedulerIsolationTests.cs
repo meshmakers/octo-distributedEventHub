@@ -81,6 +81,62 @@ public class HangfireSchedulerIsolationTests(RabbitMqFixture rabbitMq) : IAsyncL
         recorderB.Added.Should().BeEmpty();
     }
 
+    /// <summary>
+    ///     N7 (test-2-dev, 2026-10-08): an UNCHANGED schedule re-registered over and over — what every
+    ///     tenant update and every DeployTriggers does — must be in the own instance's scheduler after
+    ///     EVERY cycle.
+    /// </summary>
+    /// <remarks>
+    ///     A re-registration is "remove the group from the own Hangfire database"
+    ///     (<c>RemoveRecurringJobsByScheduleGroup</c>, a prefixed command that only the own bot service
+    ///     receives) followed by "publish the schedule again". With the shared un-prefixed queue RabbitMQ
+    ///     hands consecutive schedules round-robin to the two bot services, so with nothing else on the
+    ///     broker every SECOND publish was stored by the other instance while the remove had already
+    ///     emptied the own database: measured on test-2-dev as LOST, present, LOST, present … over eight
+    ///     DeployTriggers, and the same on tenant updates. Each cycle here waits until the schedule has
+    ///     been stored by SOME instance before it looks, so a regression shows the exact pattern instead of
+    ///     a timeout.
+    /// </remarks>
+    [Fact]
+    public async Task ReRegisteringAnUnchangedSchedule_KeepsItInTheOwnInstance_InEveryCycle()
+    {
+        // Arrange
+        var (botA, recorderA) = await StartBotServiceAsync(_prefixA);
+        var (_, recorderB) = await StartBotServiceAsync(_prefixB);
+        var eventHubA = botA.GetRequiredService<IDistributionEventHubService>();
+        const string scheduleId = "49240000000000000000d107-lease-49240000000000000000d105";
+        var jobId = $"{scheduleId}-{ScheduleGroup}";
+        const int cycles = 8;
+        var observed = new List<string>();
+
+        // Act
+        for (var cycle = 1; cycle <= cycles; cycle++)
+        {
+            // What the bot's RecurringJobConsumer does on RemoveRecurringJobsByScheduleGroup: drop every
+            // job of the group from the OWN database, then answer — only then does the controller publish.
+            foreach (var id in recorderA.Added.Keys.Where(k => k.EndsWith(ScheduleGroup)).ToList())
+            {
+                recorderA.RemoveIfExists(id);
+            }
+
+            await eventHubA.ScheduleRecurringSendAsync(new ScheduledTick { Pipeline = 105 },
+                "queue:octo::com-controller::lease-trigger",
+                new RecurringSchedulingOptions("0 */2 * * * ?", DateTime.Now, null, scheduleId, ScheduleGroup,
+                    "G1 lease probe", SchedulingMissedEventPolicy.Skip));
+
+            var expectedDeliveries = cycle;
+            await WaitUntilAsync(() => recorderA.AddCalls + recorderB.AddCalls == expectedDeliveries);
+            observed.Add(recorderA.Added.ContainsKey(jobId) ? "present" : "LOST");
+        }
+
+        // Assert
+        observed.Should().HaveCount(cycles).And.OnlyContain(state => state == "present",
+            "an unchanged schedule must survive every re-registration (observed: {0})",
+            string.Join(", ", observed));
+        recorderA.AddCalls.Should().Be(cycles);
+        recorderB.AddCalls.Should().Be(0);
+    }
+
     [Fact]
     public async Task Start_RemovesOnlyThisInstancesLegacyBindings_SoANotYetUpdatedInstanceIsUntouched()
     {
@@ -200,10 +256,18 @@ public class HangfireSchedulerIsolationTests(RabbitMqFixture rabbitMq) : IAsyncL
 
     private sealed class RecordingRecurringJobManager : IRecurringJobManager
     {
+        private int _addCalls;
+
         public ConcurrentDictionary<string, string> Added { get; } = new();
 
-        public void AddOrUpdate(string recurringJobId, Job job, string cronExpression, RecurringJobOptions options) =>
+        /// <summary>Every <c>AddOrUpdate</c> this scheduler received, including updates of a present job.</summary>
+        public int AddCalls => Volatile.Read(ref _addCalls);
+
+        public void AddOrUpdate(string recurringJobId, Job job, string cronExpression, RecurringJobOptions options)
+        {
             Added[recurringJobId] = cronExpression;
+            Interlocked.Increment(ref _addCalls);
+        }
 
         public void Trigger(string recurringJobId)
         {
