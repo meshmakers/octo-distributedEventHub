@@ -97,18 +97,36 @@ public class InstanceIsolationTests : IAsyncLifetime
         await eventHub1.PublishAsync(message1);
         await eventHub2.PublishAsync(message2);
 
-        // Wait for messages
-        await Task.Delay(5000, TestContext.Current.CancellationToken);
+        // Wait for both messages instead of a fixed delay: a fixed five seconds was enough on an idle
+        // machine and failed whenever the MongoDB collection (which runs in parallel) was starting its
+        // container at the same time. Then give a misrouted copy a moment to arrive before asserting it
+        // did not.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (DateTime.UtcNow < deadline && !(Received(_instance1Prefix).Any(m => m.MessageId == message1.Id) &&
+                                               Received(_instance2Prefix).Any(m => m.MessageId == message2.Id)))
+        {
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+
+        await Task.Delay(500, TestContext.Current.CancellationToken);
 
         // Assert - Each instance should only receive its own message
-        var instance1Messages = _receivedMessages.Where(m => m.Instance == _instance1Prefix).ToList();
-        var instance2Messages = _receivedMessages.Where(m => m.Instance == _instance2Prefix).ToList();
+        var instance1Messages = Received(_instance1Prefix);
+        var instance2Messages = Received(_instance2Prefix);
 
         instance1Messages.Should().ContainSingle(m => m.MessageId == message1.Id);
         instance1Messages.Should().NotContain(m => m.MessageId == message2.Id);
 
         instance2Messages.Should().ContainSingle(m => m.MessageId == message2.Id);
         instance2Messages.Should().NotContain(m => m.MessageId == message1.Id);
+    }
+
+    private List<(string Instance, string MessageId)> Received(string instancePrefix)
+    {
+        lock (_receivedMessages)
+        {
+            return _receivedMessages.Where(m => m.Instance == instancePrefix).ToList();
+        }
     }
 }
 
