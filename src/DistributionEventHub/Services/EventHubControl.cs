@@ -1,4 +1,5 @@
 using MassTransit;
+using MassTransit.RabbitMqTransport;
 using Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
@@ -35,6 +36,75 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
         return new EndpointHandle(handle);
     }
     
+    public EndpointHandle RegisterRoutedEventConsumer<TMessage>(string destinationAddress,
+        Func<TMessage, RoutedEventDeliveryContext, Task> handler, RoutedEventConsumerOptions options)
+        where TMessage : class
+    {
+        options.Validate();
+
+        var prefixedDestinationAddress = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, destinationAddress);
+        var coalescer = options.CoalescePendingMessages ? new PendingMessageCoalescer() : null;
+
+        var handle = busControl.ConnectReceiveEndpoint(prefixedDestinationAddress,
+            e =>
+            {
+                // Consumer-side settings only — no queue arguments, so an existing durable queue is reused
+                // as declared (AB#5709: redeclaring it with x-max-length etc. would fail with
+                // PRECONDITION_FAILED, and the producer side declares it as well).
+                if (options.EffectivePrefetchCount is { } prefetchCount &&
+                    e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
+                {
+                    rabbitConfigurator.PrefetchCount = prefetchCount;
+                }
+
+                if (options.EffectiveConcurrentMessageLimit is { } concurrentMessageLimit)
+                {
+                    e.ConcurrentMessageLimit = concurrentMessageLimit;
+                }
+
+                e.Handler<TMessage>(async consumeContext =>
+                {
+                    var deliveryContext = RoutedEventDeliveryContext.None;
+                    if (coalescer != null)
+                    {
+                        var decision = await coalescer
+                            .DecideAsync(() => GetPendingMessageCountAsync(consumeContext))
+                            .ConfigureAwait(false);
+                        if (decision == null)
+                        {
+                            // Superseded by a newer message already waiting in the queue: acknowledge only.
+                            return;
+                        }
+
+                        deliveryContext = decision;
+                    }
+
+                    await handler(consumeContext.Message, deliveryContext).ConfigureAwait(false);
+                });
+            });
+
+        return new EndpointHandle(handle);
+    }
+
+    /// <summary>
+    ///     Ready messages waiting behind the current delivery, from a passive declare of the consumed queue on
+    ///     the consuming channel. <c>null</c> when the transport is not RabbitMQ.
+    /// </summary>
+    private static async Task<uint?> GetPendingMessageCountAsync(ConsumeContext consumeContext)
+    {
+        var receiveContext = consumeContext.ReceiveContext;
+        if (!receiveContext.TryGetPayload<ChannelContext>(out var channelContext) ||
+            !receiveContext.TryGetPayload<ReceiveSettings>(out var receiveSettings))
+        {
+            return null;
+        }
+
+        var declareOk = await channelContext
+            .QueueDeclarePassive(receiveSettings.QueueName, consumeContext.CancellationToken)
+            .ConfigureAwait(false);
+        return declareOk.MessageCount;
+    }
+
     public EndpointHandle RegisterRoutedEventConsumer<TMessage>(Func<TMessage, Task> handler)
         where TMessage : class
     {

@@ -217,7 +217,11 @@ public class ExplicitQueueConsumer1 : IDistributedConsumer<ExplicitQueueMessage1
     public ExplicitQueueConsumer1(List<string> receivedMessages) => _receivedMessages = receivedMessages;
     public Task ConsumeAsync(IDistributedContext<ExplicitQueueMessage1> context)
     {
-        _receivedMessages.Add(context.Message.Id);
+        // Consumers run concurrently (default prefetch, two buses): List<T>.Add is not thread-safe and can drop an entry.
+        lock (_receivedMessages)
+        {
+            _receivedMessages.Add(context.Message.Id);
+        }
         return Task.CompletedTask;
     }
 }
@@ -228,7 +232,11 @@ public class ExplicitQueueConsumer2 : IDistributedConsumer<ExplicitQueueMessage2
     public ExplicitQueueConsumer2(List<string> receivedMessages) => _receivedMessages = receivedMessages;
     public Task ConsumeAsync(IDistributedContext<ExplicitQueueMessage2> context)
     {
-        _receivedMessages.Add(context.Message.Id);
+        // Consumers run concurrently (default prefetch, two buses): List<T>.Add is not thread-safe and can drop an entry.
+        lock (_receivedMessages)
+        {
+            _receivedMessages.Add(context.Message.Id);
+        }
         return Task.CompletedTask;
     }
 }
@@ -239,7 +247,11 @@ public class ExplicitQueueConsumer3 : IDistributedConsumer<ExplicitQueueMessage3
     public ExplicitQueueConsumer3(List<string> receivedMessages) => _receivedMessages = receivedMessages;
     public Task ConsumeAsync(IDistributedContext<ExplicitQueueMessage3> context)
     {
-        _receivedMessages.Add(context.Message.Id);
+        // Consumers run concurrently (default prefetch, two buses): List<T>.Add is not thread-safe and can drop an entry.
+        lock (_receivedMessages)
+        {
+            _receivedMessages.Add(context.Message.Id);
+        }
         return Task.CompletedTask;
     }
 }

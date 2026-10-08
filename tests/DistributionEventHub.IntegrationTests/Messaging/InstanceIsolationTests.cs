@@ -148,11 +148,11 @@ public class IsolationTestConsumer : IDistributedConsumer<IsolationTestMessage>
 
     public Task ConsumeAsync(IDistributedContext<IsolationTestMessage> context)
     {
+        // Consumers run concurrently (default prefetch, two buses): List<T>.Add is not thread-safe and can drop an entry.
         lock (_receivedMessages)
         {
             _receivedMessages.Add((_instancePrefix, context.Message.Id));
         }
-
         return Task.CompletedTask;
     }
 }
