@@ -5,15 +5,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build Commands
 
 ```bash
-# Build the entire solution
-dotnet build Octo.DistributedEventHub.sln
-
-# Build in Release mode
-dotnet build Octo.DistributedEventHub.sln -c Release
-
-# Build with local dependencies (DebugL configuration)
+# Build with local dependencies (DebugL configuration) - the default for local work
 dotnet build Octo.DistributedEventHub.sln -c DebugL
+
+# Build in Release mode against a published release (version must be passed explicitly)
+dotnet build Octo.DistributedEventHub.sln -c Release -p:OctoVersion=3.5.1
 ```
+
+Versions come only from the pipeline (AB#6291): `Directory.Build.props` has no release fallback, so a
+Debug/Release build without `-p:OctoVersion=X.Y.Z` (or `-p:OctoNugetPrivateServer=<feed>` for the main
+line `0.1.*`) fails fast with MSBuild error `OCTO0001`. Use `-c DebugL` locally.
 
 Unit tests: `tests/DistributionEventHub.UnitTests`; integration tests (Testcontainers RabbitMQ/MongoDB, Docker required): `tests/DistributionEventHub.IntegrationTests`.
 
