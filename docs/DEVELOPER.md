@@ -489,6 +489,26 @@ public class ScheduledJobService
             options);
     }
 
+    public async Task ScheduleInUserTimeZone()
+    {
+        // Fires at 07:00 in Vienna, daylight saving included. Without TimeZoneId the
+        // cron expression is evaluated in the local zone of the process that creates
+        // the schedule.
+        var options = new RecurringSchedulingOptions(
+            cronExpression: "0 0 7 * * ?",
+            scheduleId: "morning-digest",
+            scheduleGroup: "digests",
+            description: "Morning digest")
+        {
+            TimeZoneId = "Europe/Vienna"
+        };
+
+        await _eventHub.ScheduleRecurringSendAsync(
+            new GenerateReportEvent { ReportType = "digest" },
+            destinationQueueAddress: "report-processor",
+            options);
+    }
+
     public async Task ScheduleWithTimeRange()
     {
         var options = new RecurringSchedulingOptions(

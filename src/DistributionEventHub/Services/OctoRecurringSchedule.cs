@@ -4,7 +4,9 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 internal class OctoRecurringSchedule(RecurringSchedulingOptions recurringSchedulingOptions) : RecurringSchedule
 {
-    public string TimeZoneId { get; } = TimeZoneInfo.Local.Id;
+    public string TimeZoneId { get; } = string.IsNullOrWhiteSpace(recurringSchedulingOptions.TimeZoneId)
+        ? TimeZoneInfo.Local.Id
+        : recurringSchedulingOptions.TimeZoneId;
     public DateTimeOffset StartTime { get; } = recurringSchedulingOptions.StartTime;
     public DateTimeOffset? EndTime { get; } = recurringSchedulingOptions.EndTime;
     public string ScheduleId { get; } = recurringSchedulingOptions.ScheduleId;
