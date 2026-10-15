@@ -38,6 +38,11 @@ This is a distributed event system for OctoMesh services built on **MassTransit*
 3. **CommandClient** - Request/response RPC via `ICommandClient<TRequest>` and `IRoutedCommandClient<TRequest>`
 4. **Distributed Cache** - MongoDB GridFS file caching via `IDistributedCacheService`
 
+Recurring sends (`ScheduleRecurringSendAsync` with `RecurringSchedulingOptions`) evaluate the cron in
+`RecurringSchedulingOptions.TimeZoneId` (IANA or Windows id). When it is null or empty, the local zone of the process that
+creates the schedule is used (usually UTC in a container). Set it whenever the cron names a time of day for a person (the
+notification schedule passes each recipient's zone). Usage: `docs/DEVELOPER.md`; tests: `OctoRecurringScheduleTests`.
+
 ### Key Interfaces
 
 - `IDistributionEventHubService` - Main service for publishing/sending events

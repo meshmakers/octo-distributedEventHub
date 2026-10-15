@@ -83,4 +83,11 @@ public record RecurringSchedulingOptions
     /// a missed scheduled message is handled.
     /// </summary>
     public SchedulingMissedEventPolicy MisfirePolicy { get; init; }
+
+    /// <summary>
+    /// Time zone the cron expression is evaluated in, as an IANA or Windows id (for example
+    /// <c>Europe/Vienna</c>). When null or empty, the local time zone of the process that creates the
+    /// schedule is used. An id the system does not know is refused when the schedule is created.
+    /// </summary>
+    public string? TimeZoneId { get; init; }
 }
