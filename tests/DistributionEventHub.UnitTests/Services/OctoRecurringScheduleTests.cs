@@ -46,4 +46,18 @@ public class OctoRecurringScheduleTests
 
         new OctoRecurringSchedule(options).TimeZoneId.Should().Be("W. Europe Standard Time");
     }
+
+    [Fact]
+    public void AnUnknownTimeZone_IsRefusedWhereTheScheduleIsCreated()
+    {
+        var options = new RecurringSchedulingOptions("0 0 9 * * ?", "schedule-1", "group-1", "Daily summary")
+        {
+            TimeZoneId = "Europe/Viena"
+        };
+
+        var create = () => new OctoRecurringSchedule(options);
+
+        create.Should().Throw<ArgumentException>()
+            .WithMessage("*'Europe/Viena'*'schedule-1'*");
+    }
 }
