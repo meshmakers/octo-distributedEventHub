@@ -45,6 +45,19 @@ public class EventHubControlDefaultImplementationTests
         act.Should().Throw<ArgumentException>();
     }
 
+    [Fact]
+    public void SharedCommandConsumerOverloads_DefaultToNotSupported_SoExistingDoublesKeepCompiling()
+    {
+        IEventHubControl sut = new MinimalEventHubControl();
+        var options = new CommandConsumerOptions();
+
+        var plain = () => sut.RegisterCommandConsumer<string>("cmd", (_, _) => Task.CompletedTask, options);
+        var delivered = () => sut.RegisterCommandConsumer<string>("cmd", (_, _, _) => Task.CompletedTask, options);
+
+        plain.Should().Throw<NotSupportedException>();
+        delivered.Should().Throw<NotSupportedException>();
+    }
+
     private sealed class MinimalEventHubControl : IEventHubControl
     {
         public string? Address { get; private set; }

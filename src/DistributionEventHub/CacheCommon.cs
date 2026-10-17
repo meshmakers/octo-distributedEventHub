@@ -28,6 +28,17 @@ public static class CacheCommon
     }
     
     /// <summary>
+    /// Gets the name of the stable send exchange of a shared (competing-consumer) command endpoint
+    /// registered with <c>IEventHubControl.RegisterCommandConsumer(..., CommandConsumerOptions)</c>.
+    /// </summary>
+    /// <param name="prefixedCommandName">Command name including the instance prefix</param>
+    /// <returns>The exchange name</returns>
+    internal static string GetSharedCommandSendExchangeName(string prefixedCommandName)
+    {
+        return prefixedCommandName + "::send";
+    }
+
+    /// <summary>
     /// Applies instance prefix to a name if the prefix is not null or empty
     /// </summary>
     /// <param name="instancePrefix">The instance prefix to apply</param>

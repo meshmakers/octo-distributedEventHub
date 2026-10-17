@@ -363,6 +363,92 @@ public class DynamicServiceCaller
 }
 ```
 
+#### Shared Command Endpoints (Competing Consumers, `mandatory` Send)
+
+Used by CK v2 methods (`Meshmakers.Octo.Services.Methods`, AB#5671). A dynamic command endpoint registered with
+`CommandConsumerOptions` is a **shared** endpoint: any number of processes can register the same command name and
+become competing consumers on one queue. It is called with the `CommandSendOptions` overload of
+`GetCommandResponseAsync`. **The two options overloads form a pair** — do not mix them with the legacy
+`RegisterCommandConsumer(name, handler)` / `GetCommandResponseAsync(..., timeout)` overloads for the same command
+name (the broker topology differs and declarations would conflict).
+
+```csharp
+// Handler side (bus already started)
+EndpointHandle handle = eventHubControl.RegisterCommandConsumer<MyRequest>(
+    "octo::method::system.identity::user::changepassword-1",
+    async (request, respond) =>
+    {
+        try { await respond(await HandleAsync(request)); }
+        catch (Exception e) { await respond(MyResponse.Failed(e)); } // never let an exception escape (see below)
+    },
+    new CommandConsumerOptions { PrefetchCount = 16 });      // ConfigureConsumeTopology defaults to false
+await handle.WaitUntilReadyAsync();                          // queue + bindings exist → announce now
+...
+await handle.DisposeAsync();                                 // removes the consumer; queue is auto-deleted
+
+// Caller side
+try
+{
+    var response = await eventHub.GetCommandResponseAsync<MyRequest, MyResponse>(
+        "octo::method::system.identity::user::changepassword-1", request,
+        new CommandSendOptions { Timeout = timeout, Mandatory = true, TimeToLive = timeout },
+        cancellationToken);
+}
+catch (CommandNotRoutableException) { /* no consumer registered: returned by the broker in ~1 ms */ }
+catch (DistributionTimeoutException) { /* consumer did not answer in time */ }
+catch (DistributedOperationFailedException) { /* consumer faulted / send failed */ }
+// OperationCanceledException from the caller's token is re-thrown unchanged.
+```
+
+**Broker topology** (all names carry the instance prefix):
+
+| Entity | Name | Flags | Why |
+|---|---|---|---|
+| Queue | `{prefix}-{commandName}` | durable, auto-delete, **non-exclusive** | MassTransit forces `exclusive` on every non-durable auto-delete queue (`BrokerTopologyBuilder.QueueDeclare`), so a second process would fail with `RESOURCE_LOCKED` and its endpoint would never become ready. Durable + auto-delete is non-exclusive and is still removed when the last consumer leaves (graceful stop, or broker-detected dead connection). |
+| Send exchange | `{prefix}-{commandName}::send` (fanout) | durable, **not** auto-delete | Stable target for senders. The endpoint's own exchange is auto-deleted together with the queue; publishing to a deleted exchange closes the channel (404) and the next send took ~6 s to recover. A `mandatory` send to the stable exchange with no bound queue is returned in ~1 ms. |
+| Endpoint exchange | `{prefix}-{commandName}` | durable, auto-delete | MassTransit's per-endpoint exchange; not used by senders. |
+
+**`mandatory` and publisher confirms.** MassTransit 8.5.10 enables RabbitMQ publisher confirmation by default
+(`ConfigurationHostSettings.PublisherConfirmation = true`), which is what surfaces a `basic.return` as an exception.
+No bus configuration change is needed. Measured on a local RabbitMQ container: round trip p50 0.91 ms (non-mandatory)
+vs 0.95 ms (mandatory); return without a bound queue 0–2 ms (integration test `CommandSendOptionsTests`).
+
+**Retry.** The bus-level `UseMessageRetry(1s, 5s, 15s)` also wraps dynamically connected endpoints: a handler that
+throws is executed **4 times** (proven by `ThrowingDynamicConsumer_IsRetriedByBus_FourExecutions`). Handlers that must
+run at most once (CK methods) catch everything and respond with an error instead of throwing.
+
+**Delivery information (duplicate detection).** The overload taking an `ExecuteDeliveredCommandHandler<TMessage>`
+`(message, CommandDeliveryInfo delivery, respond)` exposes `Redelivered` (the broker delivered the message before
+without an ack — consumer connection lost, process killed, broker restart; the earlier delivery may or may not have
+been processed), `RetryAttempt` (bus retry filter) and `RedeliveryCount`. `delivery.IsPossibleDuplicate` is `true` if
+any of them indicates an earlier attempt. Non-idempotent handlers must not execute such a message again (CK methods
+answer `METHOD_OUTCOME_UNKNOWN`). Proven by `CommandDeliveryTests` (a raw consumer takes the message without ack, the
+broker redelivers it with `redelivered = true`).
+
+**Sensitive payloads.**
+- `CommandSendOptions.Persistent = false` sends a transient message (`delivery_mode = 1`), so it is not written to the
+  persistent message store. Residual risk: RabbitMQ can still page transient messages to disk under memory pressure
+  (classic queue v2 paging); keep `TimeToLive` short.
+- `CommandConsumerOptions.SuppressFaults = true`: exceptions escaping the handler are logged without the message and
+  swallowed (no bus retry, no `Fault<TMessage>` — which embeds the full message — to the requester or as a publish,
+  requester runs into its timeout); faulted messages (e.g. undeserializable bodies) and skipped messages are
+  **discarded** instead of being moved to the never-consumed `{queue}_error` / `{queue}_skipped` queues
+  (`DiscardFaultedMessages`, `DiscardSkippedMessages`, `PublishFaults = false`).
+- The queue itself must be durable (non-exclusive, see above); with transient messages that only means the queue
+  definition survives a broker restart, not the messages.
+
+**Cancellation.** The options send overload re-throws `OperationCanceledException` only for the caller's token; a
+cancellation from elsewhere (e.g. the bus is stopping) is wrapped in `DistributedOperationFailedException`.
+
+**Logging of mandatory returns.** MassTransit itself logs a broker return as `ERROR SendTransport: S-FAULT …::send`
+(category `MassTransit`). It is an expected outcome for CK methods (no handler); filter or lower that category in the
+host's logging configuration if the noise matters. Callers get `CommandNotRoutableException`.
+
+**Legacy endpoints are exclusive.** The same MassTransit rule makes the classic `AddCommandConsumer` endpoints
+(`Temporary = true`) and the legacy dynamic `RegisterCommandConsumer(name, handler)` queues **exclusive** at the broker:
+only one process consumes a given command name at a time; other replicas retry the declaration until the owner's
+connection is gone.
+
 ---
 
 ## File Caching with MongoDB
@@ -605,6 +691,7 @@ concern ticks missed while the **scheduler** is down anyway — not ticks buffer
 | `DistributionException` | Base exception for all distribution errors |
 | `DistributionTimeoutException` | Request timeout on command calls |
 | `DistributedOperationFailedException` | General operation failures |
+| `CommandNotRoutableException` | A `mandatory` command send was returned by the broker (no queue bound / no consumer registered) |
 
 ### Error Handling
 
@@ -719,6 +806,7 @@ The system uses the following naming schema for queues and exchanges:
 | Broadcast | `{InstancePrefix}:octo::service::{ServiceName}-{InstanceId}` |
 | Routed | `{InstancePrefix}:{DestinationAddress}` |
 | Command | `{InstancePrefix}:{CommandName}` |
+| Shared command (options overloads) | queue `{InstancePrefix}-{CommandName}`, send exchange `{InstancePrefix}-{CommandName}::send` |
 
 Example with `InstancePrefix = "prod"`:
 - Broadcast: `prod:octo::service::UserService-abc123`

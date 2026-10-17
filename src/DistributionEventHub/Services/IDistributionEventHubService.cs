@@ -68,4 +68,34 @@ public interface IDistributionEventHubService
     Task<TResponse> GetCommandResponseAsync<TRequest, TResponse>(string commandAddress, TRequest request,
         CancellationToken cancellationToken = default, TimeSpan? timeout = default)
         where TRequest : class where TResponse : class;
+
+    /// <summary>
+    ///     Send a command to a shared command endpoint (registered with
+    ///     <see cref="IEventHubControl.RegisterCommandConsumer{TMessage}(string, ExecuteCommandHandler{TMessage}, CommandConsumerOptions)" />)
+    ///     with send options and await the response. The request is published to the stable send exchange
+    ///     <c>{prefix}-{commandAddress}::send</c>.
+    /// </summary>
+    /// <param name="commandAddress">Address (command name without instance prefix) to send the command to</param>
+    /// <param name="request">The request message</param>
+    /// <param name="options">Timeout, <c>mandatory</c> flag and message TTL</param>
+    /// <param name="cancellationToken">An optional cancellation token</param>
+    /// <typeparam name="TRequest">Type of request message</typeparam>
+    /// <typeparam name="TResponse">Type of response message</typeparam>
+    /// <returns>The response message</returns>
+    /// <exception cref="CommandNotRoutableException">
+    ///     <see cref="CommandSendOptions.Mandatory" /> is set and the broker returned the message (no queue bound).
+    /// </exception>
+    /// <exception cref="DistributionTimeoutException">No response within the timeout.</exception>
+    /// <exception cref="DistributedOperationFailedException">
+    ///     The consumer faulted, the send failed or the operation was cancelled by something other than
+    ///     <paramref name="cancellationToken" /> (e.g. the bus is stopping).
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    ///     The <paramref name="cancellationToken" /> was cancelled (re-thrown unchanged, unlike the legacy overload).
+    /// </exception>
+    Task<TResponse> GetCommandResponseAsync<TRequest, TResponse>(string commandAddress, TRequest request,
+        CommandSendOptions options, CancellationToken cancellationToken = default)
+        where TRequest : class where TResponse : class
+        => throw new NotSupportedException(
+            "This IDistributionEventHubService implementation does not support shared command endpoints.");
 }

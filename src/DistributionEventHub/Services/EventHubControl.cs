@@ -1,13 +1,15 @@
 using MassTransit;
 using MassTransit.RabbitMqTransport;
 using Meshmakers.Octo.Common.DistributionEventHub.Consumers;
+using Microsoft.Extensions.Logging;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 /// <summary>
 ///     Represents the event hub control
 /// </summary>
-internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress serviceAddress) : IEventHubControl
+internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress serviceAddress,
+    ILogger<EventHubControl> logger) : IEventHubControl
 {
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -172,21 +174,132 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
             {
                 if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
                 {
+                    // Matches the request client's "exchange:...?temporary=true" declaration (else 406).
+                    // Note: MassTransit declares a non-durable auto-delete queue as EXCLUSIVE, so only one
+                    // process at a time can consume this command name.
                     rabbitConfigurator.Durable = false;
-                    rabbitConfigurator.AutoDelete = true; 
+                    rabbitConfigurator.AutoDelete = true;
                 }
-                
-                e.Handler<TMessage>(async consumeContext =>
-                {
-                    async Task RespondToCommand(object response)
-                    {
-                        await consumeContext.RespondAsync(response).ConfigureAwait(false);
-                    }
 
-                    await handler(consumeContext.Message, RespondToCommand).ConfigureAwait(false);
-                });
+                e.Handler<TMessage>(CreateCommandHandler(handler));
             });
 
         return new EndpointHandle(handle);
+    }
+
+    public EndpointHandle RegisterCommandConsumer<TMessage>(string commandName, ExecuteCommandHandler<TMessage> handler,
+        CommandConsumerOptions options) where TMessage : class
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        return RegisterCommandConsumer<TMessage>(commandName, (message, _, respond) => handler(message, respond),
+            options);
+    }
+
+    public EndpointHandle RegisterCommandConsumer<TMessage>(string commandName,
+        ExecuteDeliveredCommandHandler<TMessage> handler, CommandConsumerOptions options) where TMessage : class
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+        ArgumentNullException.ThrowIfNull(options);
+
+        var prefixedCommandName = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, commandName);
+        var sendExchangeName = CacheCommon.GetSharedCommandSendExchangeName(prefixedCommandName);
+        var handle = busControl.ConnectReceiveEndpoint(prefixedCommandName,
+            e =>
+            {
+                // Must stay false for CK method queues: otherwise a publish of TMessage would fan out to every
+                // queue that consumes the message type.
+                e.ConfigureConsumeTopology = options.ConfigureConsumeTopology;
+                if (options.ConcurrentMessageLimit is { } concurrentMessageLimit)
+                {
+                    e.ConcurrentMessageLimit = concurrentMessageLimit;
+                }
+
+                if (options.SuppressFaults)
+                {
+                    // No _error / _skipped queue copies of sensitive payloads; no Fault<T> publish.
+                    e.DiscardFaultedMessages();
+                    e.DiscardSkippedMessages();
+                    e.PublishFaults = false;
+                }
+
+                if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
+                {
+                    // Shared (competing-consumer) command topology:
+                    // - Queue durable + auto-delete: MassTransit forces EXCLUSIVE on non-durable auto-delete
+                    //   queues (second process → RESOURCE_LOCKED, endpoint never ready). A durable auto-delete
+                    //   queue is non-exclusive and is still removed when its last consumer goes away
+                    //   (graceful stop or broker-detected dead connection).
+                    // - Senders publish to a separate, stable send exchange (durable, not auto-delete) bound to
+                    //   the queue. The endpoint's own exchange is auto-deleted together with the queue; sending
+                    //   to a deleted exchange closes the channel (404) and costs seconds of recovery, whereas a
+                    //   mandatory send to the stable exchange without a bound queue is returned in milliseconds.
+                    rabbitConfigurator.Durable = true;
+                    rabbitConfigurator.AutoDelete = true;
+                    rabbitConfigurator.Exclusive = false;
+                    if (options.PrefetchCount is { } prefetchCount)
+                    {
+                        rabbitConfigurator.PrefetchCount = prefetchCount;
+                    }
+
+                    rabbitConfigurator.Bind(sendExchangeName, b =>
+                    {
+                        b.ExchangeType = "fanout";
+                        b.Durable = true;
+                        b.AutoDelete = false;
+                    });
+                }
+
+                e.Handler<TMessage>(CreateDeliveredCommandHandler(prefixedCommandName, handler,
+                    options.SuppressFaults));
+            });
+
+        return new EndpointHandle(handle);
+    }
+
+    private MessageHandler<TMessage> CreateDeliveredCommandHandler<TMessage>(string queueName,
+        ExecuteDeliveredCommandHandler<TMessage> handler, bool suppressFaults) where TMessage : class
+    {
+        return async consumeContext =>
+        {
+            var delivery = new CommandDeliveryInfo(consumeContext.ReceiveContext.Redelivered,
+                consumeContext.GetRetryAttempt(), consumeContext.GetRedeliveryCount(), consumeContext.MessageId);
+
+            async Task RespondToCommand(object response)
+            {
+                await consumeContext.RespondAsync(response).ConfigureAwait(false);
+            }
+
+            if (!suppressFaults)
+            {
+                await handler(consumeContext.Message, delivery, RespondToCommand).ConfigureAwait(false);
+                return;
+            }
+
+            try
+            {
+                await handler(consumeContext.Message, delivery, RespondToCommand).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                // Swallowed on purpose (SuppressFaults): a rethrow would retry the handler and send a
+                // Fault<TMessage> carrying the full (sensitive) message body. The message itself is never logged.
+                logger.LogError(e, "Command handler on {QueueName} failed for message {MessageId}; fault suppressed",
+                    queueName, consumeContext.MessageId);
+            }
+        };
+    }
+
+    private static MessageHandler<TMessage> CreateCommandHandler<TMessage>(ExecuteCommandHandler<TMessage> handler)
+        where TMessage : class
+    {
+        return async consumeContext =>
+        {
+            async Task RespondToCommand(object response)
+            {
+                await consumeContext.RespondAsync(response).ConfigureAwait(false);
+            }
+
+            await handler(consumeContext.Message, RespondToCommand).ConfigureAwait(false);
+        };
     }
 }
