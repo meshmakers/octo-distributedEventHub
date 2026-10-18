@@ -444,10 +444,85 @@ cancellation from elsewhere (e.g. the bus is stopping) is wrapped in `Distribute
 (category `MassTransit`). It is an expected outcome for CK methods (no handler); filter or lower that category in the
 host's logging configuration if the noise matters. Callers get `CommandNotRoutableException`.
 
-**Legacy endpoints are exclusive.** The same MassTransit rule makes the classic `AddCommandConsumer` endpoints
+**Legacy endpoints are exclusive.** The same MassTransit rule makes the classic `AddCommandConsumer(name)` endpoints
 (`Temporary = true`) and the legacy dynamic `RegisterCommandConsumer(name, handler)` queues **exclusive** at the broker:
 only one process consumes a given command name at a time; other replicas retry the declaration until the owner's
-connection is gone.
+connection is gone. This is deprecated since AB#6909 (one warning per command name and process); see the next section
+for the migration to a shared queue.
+
+#### Migrating exclusive command queues (AB#6909)
+
+**Opt-in per consumer.** Nothing changes for a registration without the switch: queue name, arguments and behaviour are
+byte-identical to before (pinned by `LegacyCommandEndpointUnchangedTests` and
+`LegacyCommandMigrationTests.ClassicRegistration_WithoutOption_KeepsExclusiveQueue_NoSharedQueueNoSendExchange`).
+
+```csharp
+// DI registration (service Program.cs)
+config.AddCommandConsumer<ImportCkConsumer, ImportCkCommandRequest>("octo::bot::import-ck",
+    new CommandConsumerOptions { MigratesLegacyCommand = true });
+
+// dynamic registration
+EndpointHandle handle = eventHubControl.RegisterCommandConsumer<MyRequest>("my-command", handler,
+    new CommandConsumerOptions { MigratesLegacyCommand = true });
+await handle.WaitUntilReadyAsync();
+```
+
+Senders (`AddCommandClient`, `ICommandClient`, `GetCommandResponseAsync(..., timeout)`) are **not changed**.
+
+**Topology decision (and why).** RabbitMQ refuses to redeclare a queue or an exchange with different arguments
+(`PRECONDITION_FAILED`, 406), and an exclusive queue cannot be used by any other connection (`RESOURCE_LOCKED`, 405).
+The classic queue/exchange `N` is non-durable/exclusive; the shared topology needs a durable, non-exclusive queue. Both on
+the name `N` would make the old and the new replica fail on each other, in either start order. A migrated command therefore
+uses its own names and never touches `N`:
+
+| Entity | Name | Flags | Used by |
+|---|---|---|---|
+| Queue | `{prefix}-{commandName}::shared` | durable, auto-delete, non-exclusive | migrated replicas (competing consumers) |
+| Send exchange | `{prefix}-{commandName}::send` (fanout) | durable, not auto-delete | `CommandSendOptions` senders |
+| Classic exchange | `{prefix}-{commandName}` (fanout) | non-durable, auto-delete | classic senders; bound to the shared queue only by the bridge, only while no classic consumer exists |
+
+**The bridge: no loss, no double processing without a flag day.** A fanout exchange copies a message into every bound
+queue. If the shared queue were bound to the classic exchange permanently, every classic command would be processed twice
+while an old replica runs. The migrated replicas therefore reconcile every `LegacyProbeInterval` (default 2 s):
+the classic queue alive (passive declare answers 405 or succeeds) -> unbind and stand by; gone (404) -> bind. While an old
+replica exists it receives all classic commands (as before); as soon as the last one is gone, the migrated replicas serve them.
+All replicas run the same idempotent check, so they converge. The bridge never creates the shared queue and does not remove its
+binding on shutdown (the queue is shared and disappears with its last consumer).
+
+**Rollout order** (per service, no order between services, senders untouched):
+
+1. Release the library containing this change; no service behaviour changes.
+2. Set `MigratesLegacyCommand = true` on the registrations of one service (bot-services and identity: AB#6910). Make sure the
+   handler is safe under competing consumers.
+3. Roll the service (rolling update). Old replicas keep the classic traffic; new replicas start cleanly and stand by; after the
+   last old replica terminated, the new replicas take over within one probe interval and share the work.
+4. Optionally move senders to `CommandSendOptions` (mandatory send) later, when every consumer of the command is migrated.
+5. Rollback: stop the migrated replicas first, then start the old version.
+
+**What can be lost (honest window).** (a) Commands that are *ready in the old queue* when the last old replica stops vanish
+with that non-durable queue; delivered commands are completed first. This is identical to a restart of the former single
+consumer. (b) Between the stop of the last old replica and the next bridge pass (<= `LegacyProbeInterval`) classic commands
+reach no queue; the sender's timeout/retry covers it. (c) In a rollback where an old replica starts while the shared queue is
+bound, commands are processed twice for <= one interval. `LegacyCommandMigrationTests` proves: no command is processed twice
+in the rolling-update scenario, no command is processed twice after the bridge stepped aside in a rollback, and everything
+sent after the take-over is processed exactly once.
+
+**Failure behaviour of the new replica.**
+
+| Situation | Reaction | Test |
+|---|---|---|
+| Classic queue held exclusively by an old replica | starts normally, stands by, INFO log | `QueueDeclaredExclusiveByForeignConnection_SharedReplicaStartsAndReactsWithoutPreconditionFailed` |
+| Classic exchange exists with other arguments (for example durable) | bridge `Faulted`, WARN log; the shared queue still serves `::send`; recovers when the exchange is removed | `ClassicExchangeWithOtherArguments_FaultsWithoutThrowing_AndRecoversWhenItIsRemoved` |
+| Broker unreachable for the bridge | bridge `Faulted`, retries every interval, never throws | `BrokerUnreachable_ReconcileFaultsWithoutThrowing` |
+| Shared queue not declared yet | `SharedQueueMissing`, retried; the bridge never creates the queue | `SharedQueueDoesNotExistYet_ReportsMissing_AndDoesNotCreateIt` |
+
+**Deprecation.** The classic registrations log one warning per command name and process. No `[Obsolete]` attribute: all consumer
+repositories build with warnings as errors, and consumers that are exclusive *by design* (one instance owns the address, for
+example per-pipeline command nodes) must keep compiling. The consumer list is in `CLAUDE.md`.
+
+**Operations.** New broker names appear (`*::shared` queues, `*::send` exchanges). Monitoring or broker policies that match
+command queue names must include them; the classic queue disappears from a migrated service as soon as its last old replica
+is gone.
 
 ---
 

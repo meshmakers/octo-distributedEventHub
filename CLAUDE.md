@@ -122,6 +122,68 @@ bindings stay, so a not yet updated instance keeps working. Jobs that already la
 Hangfire database are not moved; remove them there by hand. Tests:
 `UnitTests/Configuration/HangfireSchedulerTopologyTests`, `IntegrationTests/Messaging/HangfireSchedulerIsolationTests`.
 
+### Command consumers: exclusive (classic) versus shared (AB#6909)
+
+`AddCommandConsumer(name)` and `RegisterCommandConsumer(name, handler)` (without options) declare a non-durable
+auto-delete queue, which MassTransit forces to **exclusive**: one process at a time consumes the command, further
+replicas wait. This is **deprecated** (a warning is logged once per command name; no `[Obsolete]`, because every consumer
+repository builds with warnings as errors). The shared topology consumes the same command with any number of replicas.
+
+| | Classic (exclusive) | Shared, plain (CK methods) | Shared, migrating (`MigratesLegacyCommand = true`) |
+|---|---|---|---|
+| Register | `AddCommandConsumer(name)` / `RegisterCommandConsumer(name, h)` | `RegisterCommandConsumer(name, h, new CommandConsumerOptions())` | `AddCommandConsumer(name, new CommandConsumerOptions { MigratesLegacyCommand = true })` or `RegisterCommandConsumer(name, h, same options)` |
+| Queue | `{p}-{name}` exclusive, non-durable, auto-delete | `{p}-{name}` durable, auto-delete, non-exclusive | `{p}-{name}::shared` durable, auto-delete, non-exclusive |
+| Sender | `AddCommandClient` / `GetCommandResponseAsync(..., timeout)` -> exchange `{p}-{name}` | `GetCommandResponseAsync(..., CommandSendOptions)` -> exchange `{p}-{name}::send` | **both**: classic senders (unchanged) via the bridge, `CommandSendOptions` senders via `::send` |
+
+**Why a distinct queue name.** RabbitMQ refuses to redeclare a queue or exchange with other arguments (PRECONDITION_FAILED,
+406) and an exclusive queue is closed to every other connection (RESOURCE_LOCKED, 405). Reusing `{p}-{name}` makes an old and
+a new replica fail on each other (pinned by `Premise_SameNameSharedTopology_ConflictsWithTheClassicQueueAndExchange`). The
+plain shared topology is therefore only for NEW names (CK methods); a command that has an exclusive history uses the
+migrating variant.
+
+**The bridge (`LegacyCommandBridge`).** Senders of the ~15 repositories that call `AddCommandClient` must not change. A
+migrated consumer therefore also serves the classic sender address: its shared queue is bound to the classic exchange
+`{p}-{name}` **only while no classic consumer exists**. A fanout exchange copies a message into every bound queue, so a
+permanent binding would process each classic command twice while an old replica runs. Every replica of the migrated consumer
+runs the same idempotent reconcile every `LegacyProbeInterval` (default 2 s): passive declare of the classic queue (405 or
+success = alive, 404 = gone) -> alive: unbind (new replicas stand by, the old one keeps all classic traffic); gone: declare the
+exchange with the classic arguments (fanout, non-durable, auto-delete) and bind. The shared queue is never created by the
+bridge. Known windows, each bounded by the interval: after the last old replica stopped, classic commands reach no queue until
+the next pass (the sender's timeout/retry covers it, as for every restart of the former single consumer); if a classic replica
+(re)starts while the shared queue is bound (rollback), commands are copied to both until the next pass.
+
+**Rolling update (old = exclusive, new = migrating), one service at a time:**
+1. Release the event hub library (this change). No behaviour changes until a consumer opts in.
+2. Switch the consumer registrations of ONE service to `MigratesLegacyCommand = true` (AB#6910 for bot-services and identity).
+   Senders are untouched, so there is no order between services and no sender-first or consumer-first constraint.
+3. Roll the service. While an old replica is alive it keeps every classic command; the new replicas start without error and
+   stand by (INFO "a classic exclusive consumer ... is alive"). When the last old replica terminates, the new replicas bind
+   and consume (INFO "the shared queue now also serves classic senders"), and from then on all replicas share the work.
+4. Commands that were ready in the old (non-durable) queue when its last replica stops are lost with that queue, exactly as
+   at every restart of the former single consumer; commands already delivered to the old replica are completed before it
+   stops. Keep the termination grace period of the old pods and scale one replica at a time to keep the window small.
+5. Rollback: stop the migrated replicas first, then start the old version (otherwise commands are processed twice until the
+   next bridge pass).
+6. After every service of the fleet runs the migrated version, senders MAY move to `CommandSendOptions` (mandatory send,
+   `CommandNotRoutableException`); the classic address stays served by the bridge until the last classic sender is gone.
+
+The handler must be safe under competing consumers (no state shared between messages, no "only one instance" assumption).
+`AddCommandConsumer(name, options)` does not support `SuppressFaults` (use the dynamic registration for sensitive payloads).
+Operations: queues named `*::shared` and exchanges `*::send` are new names; broker policies or monitoring that match command
+queue names (Platform Ops) must include them. Details and API: `docs/DEVELOPER.md` -> "Migrating exclusive command queues".
+
+**Command consumers in the monorepo** (snapshot of `main` on 2026-10-18; senders in the last column):
+
+| Repository | Registration | Command (queue name) | Kind | Senders |
+|---|---|---|---|---|
+| octo-bot-services (`Program.cs`) | `AddCommandConsumer` (`ModelCommandsConsumer`) | `octo::bot::import-ck`, `import-ck-batch`, `import-rt`, `export-rt-by-query`, `export-rt-by-deep-graph` | exclusive, migration candidate | octo-asset-repo-services (`ModelsController`, `AddCommandClient`) |
+| octo-bot-services (`Program.cs`) | `AddCommandConsumer` (`RecurringJobConsumer`) | `octo::bot::remove-recurring-jobs-by-schedule-group` | exclusive, migration candidate | octo-communication-controller-services, octo-ai-services, octo-mcp-service (`AddCommandClient`) |
+| octo-identity-services (`Program.cs`) | `AddCommandConsumer` (`CreateIdentityDataCommandRequestConsumer`) | `octo::identity::create-identity-data` | exclusive, migration candidate | asset-repo, bot, communication-controller, ai, mcp, report (`AddCommandClient`, `DefaultConfigurationCreatorService`) |
+| octo-communication-sdk (`FromPipelineDataEventNode`) | `RegisterCommandConsumer` per pipeline | `pipelinedatacommand-{tenant}-dataflow-{id}-pipeline-{id}` | exclusive, addressed to one pipeline instance | `ToPipelineDataEventNode` (`GetCommandResponseAsync`) |
+| octo-communication-sdk (`FromExecutePipelineCommandNode`) | `RegisterCommandConsumer` per pipeline | `octo::...execute-pipeline-{tenant}-pipeline-{id}` (`PipelineQueueNames.ExecutePipelineCommand`) | exclusive, addressed to one pipeline instance | communication-controller `TriggerManagementService` (`IRoutedCommandClient`) |
+| octo-mesh-adapter (`FromSendNotificationNode`) | `RegisterCommandConsumer` per data flow | `octo::com-controller::send-notification-pipeline-{tenant}-data-flow-{id}` | exclusive, addressed to one data flow | communication-controller |
+| octo-common-services (`CkMethodHandlerStartupService`), octo-communication-controller-services (`PipelineMethodHost`) | `RegisterCommandConsumer(..., CommandConsumerOptions)` | CK method queues `octo::method::...` | already shared (plain topology, AB#6891/AB#5671) | CK method dispatch |
+
 ### Dependencies
 
 - MassTransit.RabbitMQ 8.5.10

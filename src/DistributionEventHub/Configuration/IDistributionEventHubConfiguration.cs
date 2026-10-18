@@ -54,12 +54,43 @@ public interface IDistributionEventHubConfiguration
     /// <summary>
     ///     Adds a command consumer to the DI container, by providing the command name and the consumer type.
     /// </summary>
+    /// <remarks>
+    ///     Classic topology: the queue is EXCLUSIVE, so only one process at a time consumes the command and further
+    ///     replicas wait. Deprecated since AB#6909 (a warning is logged at bus start): use
+    ///     <see cref="AddCommandConsumer{TConsumer,TMessage}(string, CommandConsumerOptions)" /> with
+    ///     <see cref="CommandConsumerOptions.MigratesLegacyCommand" /> unless exactly one instance must own the
+    ///     address.
+    /// </remarks>
     /// <param name="commandName">Unique name of command (e.g. my-command)</param>
     /// <typeparam name="TConsumer">The consumer type class</typeparam>
     /// <typeparam name="TMessage">Type of incoming message</typeparam>
     void AddCommandConsumer<TConsumer, TMessage>(string commandName)
         where TConsumer : class, IDistributedConsumer<TMessage>
         where TMessage : class;
+
+    /// <summary>
+    ///     Adds a command consumer on the shared (competing-consumer) topology: every replica of the service consumes
+    ///     the same durable queue and each command is processed by exactly one replica.
+    /// </summary>
+    /// <remarks>
+    ///     For a command name that the classic <see cref="AddCommandConsumer{TConsumer,TMessage}(string)" /> served
+    ///     before, set <see cref="CommandConsumerOptions.MigratesLegacyCommand" />: old and new replicas can then run
+    ///     side by side during a rolling update. <see cref="CommandConsumerOptions.SuppressFaults" /> is not supported
+    ///     here (use the dynamic <c>IEventHubControl.RegisterCommandConsumer</c> for that). The default
+    ///     implementation throws so existing implementations of this interface keep compiling.
+    ///     The consumer must be safe under competing consumers. See <c>docs/DEVELOPER.md</c> → "Migrating exclusive
+    ///     command queues".
+    /// </remarks>
+    /// <param name="commandName">Unique name of command (e.g. my-command)</param>
+    /// <param name="options">Endpoint options</param>
+    /// <typeparam name="TConsumer">The consumer type class</typeparam>
+    /// <typeparam name="TMessage">Type of incoming message</typeparam>
+    /// <exception cref="ArgumentException"><see cref="CommandConsumerOptions.SuppressFaults" /> is set.</exception>
+    void AddCommandConsumer<TConsumer, TMessage>(string commandName, CommandConsumerOptions options)
+        where TConsumer : class, IDistributedConsumer<TMessage>
+        where TMessage : class
+        => throw new NotSupportedException(
+            "This IDistributionEventHubConfiguration implementation does not support shared command consumers.");
 
     /// <summary>
     ///     Adds a broadcast event consumer to the DI container, by providing the service name and the consumer type.
