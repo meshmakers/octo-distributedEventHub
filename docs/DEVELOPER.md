@@ -504,7 +504,8 @@ with that non-durable queue; delivered commands are completed first. This is ide
 consumer. (b) Between the stop of the last old replica and the next bridge pass (<= `LegacyProbeInterval`) classic commands
 reach no queue; the sender's timeout/retry covers it. (c) In a rollback where an old replica starts while the shared queue is
 bound, commands are processed twice for <= one interval. `LegacyCommandMigrationTests` proves: no command is processed twice
-in the rolling-update and rollback scenarios, and everything sent after the take-over is processed exactly once.
+in the rolling-update scenario, no command is processed twice after the bridge stepped aside in a rollback, and everything
+sent after the take-over is processed exactly once.
 
 **Failure behaviour of the new replica.**
 
