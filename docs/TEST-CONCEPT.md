@@ -1313,6 +1313,25 @@ public class IsolationTestConsumer : IDistributedConsumer<IsolationTestMessage>
 
 ---
 
+### 8. Exclusive to Shared Command Queue Migration (AB#6909)
+
+**Files:** `Messaging/LegacyCommandMigrationTests.cs` (mixed fleets with a ledger of processed commands),
+`Messaging/LegacyCommandBridgeTests.cs` (state machine against raw broker entities), unit tests in
+`Services/LegacyCommandMigrationUnitTests.cs`. Private RabbitMQ container (`RabbitMqFixture`).
+
+| Test | Proves |
+|---|---|
+| `TwoSharedReplicas_ShareOneQueue_EachCommandIsProcessedOnce_ForClassicAndSendOptionsSenders` | two migrated replicas share one queue; classic and `CommandSendOptions` senders both reach it; no command twice |
+| `ClassicRegistration_WithoutOption_KeepsExclusiveQueue_NoSharedQueueNoSendExchange` | without the switch: exclusive queue (405), no `::shared` queue, no `::send` exchange |
+| `MixedFleet_OldReplicaRuns_NewSharedReplicasStartWithoutError_AndStandBy` | old exclusive replica + two new shared replicas: no PRECONDITION_FAILED/RESOURCE_LOCKED, classic traffic stays with the old replica, each command once |
+| `RollingUpdate_OldReplicaStops_NewReplicasTakeOver_NoCommandProcessedTwice` | commands in flight at the switch are answered once or not at all; after the take-over everything is processed once, spread over both new replicas |
+| `Rollback_ClassicReplicaStartsWhileSharedQueueServesClassicSenders_BridgeStepsAside` | a classic replica starting after the take-over: the bridge unbinds, no duplicates afterwards |
+| `QueueDeclaredExclusiveByForeignConnection_SharedReplicaStartsAndReactsWithoutPreconditionFailed` | the queue is already exclusive (raw "old replica"): the new replica starts |
+| `Premise_SameNameSharedTopology_ConflictsWithTheClassicQueueAndExchange` | documents why the shared queue needs its own name (405 on the queue, 406 on the exchange) |
+| `DynamicRegistration_WithMigrationSwitch_SharesTheQueue_AndServesClassicSenders` | `RegisterCommandConsumer(..., options)` with the switch; disposing a handle leaves the other serving |
+| bridge: `NoClassicConsumer_BindsSharedQueueToClassicExchange_AndClassicTrafficArrives`, `ClassicConsumerAlive_DoesNotBind_...`, `ClassicConsumerStartsWhileBound_BridgeUnbinds`, `ClassicExchangeWithOtherArguments_...`, `BrokerUnreachable_...`, `BackgroundLoop_FollowsTheClassicConsumer_AndDisposeIsIdempotent` | the reconcile state machine and its failure cases |
+| unit | switch is off by default; queue naming; interface default implementation; `SuppressFaults` rejected; endpoint definition only with options; deprecation logged once per name |
+
 ## Test Infrastructure
 
 ### Test Project File

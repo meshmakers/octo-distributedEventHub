@@ -67,6 +67,13 @@ var response = await routedClient.GetResponse<UserResponse>("user-service", getU
 With `Mandatory`, a send without a registered consumer fails in milliseconds with `CommandNotRoutableException`
 instead of waiting for the timeout. See `docs/DEVELOPER.md` → "Shared Command Endpoints".
 
+**Exclusive versus shared command consumers.** The classic `AddCommandConsumer(name)` / `RegisterCommandConsumer(name, handler)`
+declare an *exclusive* queue (one replica consumes, deprecated, a warning is logged). To let all replicas of a service share a
+command, register it with `new CommandConsumerOptions { MigratesLegacyCommand = true }`
+(`AddCommandConsumer(name, options)` or `RegisterCommandConsumer(name, handler, options)`): the senders stay unchanged, old
+(exclusive) and new (shared) replicas can run side by side during a rolling update, and the new replicas take over when the
+last old one is gone. See `docs/DEVELOPER.md` -> "Migrating exclusive command queues" for the rollout order.
+
 ### 4. MongoDB File Caching
 **Implementation:** `DistributedCacheService`
 - **Storage:** MongoDB GridFS via `IRepositoryClient`

@@ -3,6 +3,8 @@ using MassTransit.Configuration;
 using Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 using Meshmakers.Octo.Common.DistributionEventHub.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 
@@ -14,6 +16,7 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
     : IDistributionEventHubConfiguration
 {
     private readonly ServiceCollectionBusConfigurator _busConfigurator = new(serviceCollection);
+    private readonly List<string> _exclusiveCommandNames = [];
 
     /// <summary>
     ///     Use the publishing message scheduler to schedule messages using the Hangfire scheduler
@@ -76,6 +79,55 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
                 c.ConfigureConsumeTopology = false;
             });
         serviceCollection.AddScoped<TConsumer>();
+
+        // Deprecation notice (AB#6909): one observer for all classic registrations, logs once at bus start.
+        if (_exclusiveCommandNames.Count == 0)
+        {
+            serviceCollection.AddBusObserver(sp => new LegacyCommandDeprecationObserver(
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DistributionEventHubConfiguration)),
+                _exclusiveCommandNames));
+        }
+
+        _exclusiveCommandNames.Add(prefixedCommandName);
+    }
+
+    public void AddCommandConsumer<TConsumer, TMessage>(string commandName, CommandConsumerOptions options)
+        where TConsumer : class, IDistributedConsumer<TMessage>
+        where TMessage : class
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.SuppressFaults)
+        {
+            throw new ArgumentException(
+                "CommandConsumerOptions.SuppressFaults is not supported by AddCommandConsumer; use " +
+                "IEventHubControl.RegisterCommandConsumer for endpoints that carry sensitive payloads.",
+                nameof(options));
+        }
+
+        var prefixedCommandName = CacheCommon.ApplyInstancePrefix(InstancePrefix, commandName);
+        var sendExchangeName = CacheCommon.GetSharedCommandSendExchangeName(prefixedCommandName);
+        var queueName = options.MigratesLegacyCommand
+            ? CacheCommon.GetMigratedSharedCommandQueueName(prefixedCommandName)
+            : prefixedCommandName;
+
+        serviceCollection.AddSingleton<IConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>>(
+            new SharedCommandConsumerDefinition<DistributedConsumer<TConsumer, TMessage>>(queueName,
+                sendExchangeName, options));
+        _busConfigurator.AddConsumer<DistributedConsumer<TConsumer, TMessage>>()
+            .Endpoint(c =>
+            {
+                c.Name = queueName;
+                c.ConfigureConsumeTopology = options.ConfigureConsumeTopology;
+            });
+        serviceCollection.AddScoped<TConsumer>();
+
+        if (options.MigratesLegacyCommand)
+        {
+            serviceCollection.AddBusObserver(sp => new LegacyCommandBridgeObserver(() => new LegacyCommandBridge(
+                sp.GetRequiredService<IOptions<RabbitMqTransportOptions>>().Value, prefixedCommandName, queueName,
+                options.LegacyProbeInterval,
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger<LegacyCommandBridge>())));
+        }
     }
     
     public void AddBroadcastEventConsumer<TConsumer, TMessage>()

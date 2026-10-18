@@ -39,6 +39,19 @@ public static class CacheCommon
     }
 
     /// <summary>
+    /// Gets the name of the shared queue of a command that migrates from the classic exclusive topology
+    /// (<see cref="Services.CommandConsumerOptions.MigratesLegacyCommand" />). It differs from the classic queue
+    /// name on purpose: RabbitMQ refuses to redeclare a queue with other arguments and an exclusive queue is
+    /// not accessible for a second connection, so old and new replicas cannot share one name (AB#6909).
+    /// </summary>
+    /// <param name="prefixedCommandName">Command name including the instance prefix</param>
+    /// <returns>The queue name</returns>
+    internal static string GetMigratedSharedCommandQueueName(string prefixedCommandName)
+    {
+        return prefixedCommandName + "::shared";
+    }
+
+    /// <summary>
     /// Applies instance prefix to a name if the prefix is not null or empty
     /// </summary>
     /// <param name="instancePrefix">The instance prefix to apply</param>

@@ -2,6 +2,7 @@ using MassTransit;
 using MassTransit.RabbitMqTransport;
 using Meshmakers.Octo.Common.DistributionEventHub.Consumers;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
@@ -9,7 +10,8 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 ///     Represents the event hub control
 /// </summary>
 internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress serviceAddress,
-    ILogger<EventHubControl> logger) : IEventHubControl
+    ILogger<EventHubControl> logger, IOptions<RabbitMqTransportOptions> transportOptions,
+    ILoggerFactory loggerFactory) : IEventHubControl
 {
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -169,6 +171,7 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
         where TMessage : class
     {
         var prefixedCommandName = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, commandName);
+        LegacyCommandDeprecation.WarnOnce(logger, prefixedCommandName);
         var handle = busControl.ConnectReceiveEndpoint(prefixedCommandName,
             e =>
             {
@@ -203,7 +206,16 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
 
         var prefixedCommandName = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, commandName);
         var sendExchangeName = CacheCommon.GetSharedCommandSendExchangeName(prefixedCommandName);
-        var handle = busControl.ConnectReceiveEndpoint(prefixedCommandName,
+        // A command name that the classic exclusive consumer serves (or served until now) gets a distinct queue
+        // name, so old and new replicas can run side by side (AB#6909); CK method endpoints keep the plain name.
+        var queueName = options.MigratesLegacyCommand
+            ? CacheCommon.GetMigratedSharedCommandQueueName(prefixedCommandName)
+            : prefixedCommandName;
+        LegacyCommandBridge? bridge = options.MigratesLegacyCommand
+            ? new LegacyCommandBridge(transportOptions.Value, prefixedCommandName, queueName,
+                options.LegacyProbeInterval, loggerFactory.CreateLogger<LegacyCommandBridge>())
+            : null;
+        var handle = busControl.ConnectReceiveEndpoint(queueName,
             e =>
             {
                 // Must stay false for CK method queues: otherwise a publish of TMessage would fan out to every
@@ -224,36 +236,15 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
 
                 if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
                 {
-                    // Shared (competing-consumer) command topology:
-                    // - Queue durable + auto-delete: MassTransit forces EXCLUSIVE on non-durable auto-delete
-                    //   queues (second process → RESOURCE_LOCKED, endpoint never ready). A durable auto-delete
-                    //   queue is non-exclusive and is still removed when its last consumer goes away
-                    //   (graceful stop or broker-detected dead connection).
-                    // - Senders publish to a separate, stable send exchange (durable, not auto-delete) bound to
-                    //   the queue. The endpoint's own exchange is auto-deleted together with the queue; sending
-                    //   to a deleted exchange closes the channel (404) and costs seconds of recovery, whereas a
-                    //   mandatory send to the stable exchange without a bound queue is returned in milliseconds.
-                    rabbitConfigurator.Durable = true;
-                    rabbitConfigurator.AutoDelete = true;
-                    rabbitConfigurator.Exclusive = false;
-                    if (options.PrefetchCount is { } prefetchCount)
-                    {
-                        rabbitConfigurator.PrefetchCount = prefetchCount;
-                    }
-
-                    rabbitConfigurator.Bind(sendExchangeName, b =>
-                    {
-                        b.ExchangeType = "fanout";
-                        b.Durable = true;
-                        b.AutoDelete = false;
-                    });
+                    SharedCommandTopology.Configure(rabbitConfigurator, sendExchangeName, options.PrefetchCount);
                 }
 
-                e.Handler<TMessage>(CreateDeliveredCommandHandler(prefixedCommandName, handler,
+                e.Handler<TMessage>(CreateDeliveredCommandHandler(queueName, handler,
                     options.SuppressFaults));
             });
 
-        return new EndpointHandle(handle);
+        bridge?.Start();
+        return new EndpointHandle(handle, bridge);
     }
 
     private MessageHandler<TMessage> CreateDeliveredCommandHandler<TMessage>(string queueName,
