@@ -61,6 +61,12 @@ var response = await commandClient.GetResponse<UserResponse>(getUserCmd);
 var response = await routedClient.GetResponse<UserResponse>("user-service", getUserCmd);
 ```
 
+**Shared command endpoints** (competing consumers, used by CK methods): register with
+`IEventHubControl.RegisterCommandConsumer(name, handler, new CommandConsumerOptions { ... })` and call with
+`GetCommandResponseAsync(name, request, new CommandSendOptions { Timeout, Mandatory = true, TimeToLive })`.
+With `Mandatory`, a send without a registered consumer fails in milliseconds with `CommandNotRoutableException`
+instead of waiting for the timeout. See `docs/DEVELOPER.md` → "Shared Command Endpoints".
+
 ### 4. MongoDB File Caching
 **Implementation:** `DistributedCacheService`
 - **Storage:** MongoDB GridFS via `IRepositoryClient`

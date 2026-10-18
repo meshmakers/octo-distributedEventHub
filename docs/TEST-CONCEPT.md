@@ -1283,6 +1283,34 @@ public class IsolationTestConsumer : IDistributedConsumer<IsolationTestMessage>
 }
 ```
 
+### 6. Shared Command Endpoint Integration Tests (AB#5671)
+
+**File:** `Messaging/CommandSendOptionsTests.cs` — `CommandConsumerOptions` / `CommandSendOptions` overloads used by CK methods.
+
+| Test | Proves |
+|---|---|
+| `Mandatory_NoQueueBound_ThrowsCommandNotRoutableFast` | mandatory send without a bound queue → `CommandNotRoutableException` in < 500 ms (measured 0–2 ms) |
+| `Mandatory_AfterEndpointDisposed_ThrowsCommandNotRoutable` | after `EndpointHandle.DisposeAsync` the next sends are returned in < 500 ms (stable send exchange, no 404 channel recovery) |
+| `NotMandatory_NoQueueBound_ThrowsDistributionTimeout` | documents the pre-existing behaviour: without `mandatory` the caller waits the full timeout |
+| `Cancellation_IsRethrownUnchanged` | caller cancellation surfaces as `OperationCanceledException` |
+| `ThrowingDynamicConsumer_IsRetriedByBus_FourExecutions` | bus-level retry (1s/5s/15s) reaches dynamic endpoints; fault then maps to `DistributedOperationFailedException` (~21 s test) |
+| `NonThrowingWrappedConsumer_IsExecutedExactlyOnce` | a catch-all handler that responds with an error is executed once |
+| `ConfigureConsumeTopologyFalse_PublishDoesNotReachQueue` | `ConfigureConsumeTopology=false` keeps type-exchange publishes away (control endpoint with `true` receives it) |
+| `TwoConsumersSameCommandName_AreCompetingConsumers` | two processes share one queue (both receive > 0 of 20) — regression guard for MassTransit's implicit `exclusive` |
+| `SendLatency_MandatoryVersusNonMandatory_IsRecorded` | records round-trip p50/p95 for both modes (set `OCTO_DEH_TEST_LOG` to capture) |
+
+### 7. Delivery and Fault Suppression Integration Tests (CK v2 review H5/M5)
+
+**File:** `Messaging/CommandDeliveryTests.cs`
+
+| Test | Proves |
+|---|---|
+| `UnackedMessage_IsRedelivered_HandlerSeesRedeliveredFlag_AndTransientDeliveryMode` | a raw consumer takes the message without ack and disconnects → the handler endpoint receives it with `Redelivered = true`; `Persistent = false` produces `delivery_mode` transient |
+| `FirstDelivery_IsNotAPossibleDuplicate` | normal delivery: `IsPossibleDuplicate = false` |
+| `InProcessRetry_IsVisibleAsRetryAttempt` | the bus retry shows up as `RetryAttempt = 1` |
+| `SuppressFaults_ThrowingHandler_RunsOnce_NoErrorQueue_RequesterTimesOut` | no retry, no `Fault<T>` to the requester |
+| `UndeserializableMessage_ErrorAndSkippedQueues_OnlyWithoutSuppressFaults` | default keeps a copy in `_error`/`_skipped`; `SuppressFaults` discards it |
+
 ---
 
 ## Test Infrastructure
