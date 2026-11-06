@@ -72,7 +72,10 @@ public interface IEventHubControl
         Func<TMessage, Task> handler) where TMessage : class;
 
     /// <summary>
-    ///     Registers a handler for a command message with the specified command name.
+    ///     Registers a handler for a command message with the specified command name on the classic EXCLUSIVE queue
+    ///     (only one process at a time consumes it). Deprecated since AB#6909 (one warning per command name): use the
+    ///     options overload with <see cref="CommandConsumerOptions.MigratesLegacyCommand" />, or declare the consumer
+    ///     exclusive by design with <see cref="CommandConsumerOptions.ExclusiveByDesign" />.
     /// </summary>
     /// <param name="commandName"></param>
     /// <param name="handler"></param>
@@ -92,12 +95,18 @@ public interface IEventHubControl
     /// <remarks>
     ///     The handler should never throw: the bus-level message retry also wraps dynamically connected endpoints,
     ///     so an exception escaping the handler causes the message to be redelivered (up to 4 executions).
+    ///     With <see cref="CommandConsumerOptions.ExclusiveByDesignReason" /> (factory
+    ///     <see cref="CommandConsumerOptions.ExclusiveByDesign" />) the endpoint keeps the classic exclusive topology of
+    ///     <see cref="RegisterCommandConsumer{TMessage}(string, ExecuteCommandHandler{TMessage})" /> (classic senders,
+    ///     no <c>::send</c> exchange) and no deprecation warning is logged (AB#8363).
     /// </remarks>
     /// <param name="commandName">Command name (queue name without the instance prefix)</param>
     /// <param name="handler">Handler for the message</param>
     /// <param name="options">Endpoint options</param>
     /// <typeparam name="TMessage">Type of incoming message</typeparam>
     /// <returns>Handle to stop and remove the endpoint</returns>
+    /// <exception cref="ArgumentException">The exclusive-by-design declaration is invalid (empty reason, combined with
+    ///     a shared-topology option).</exception>
     EndpointHandle RegisterCommandConsumer<TMessage>(string commandName, ExecuteCommandHandler<TMessage> handler,
         CommandConsumerOptions options) where TMessage : class
         => throw new NotSupportedException(

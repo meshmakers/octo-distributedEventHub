@@ -520,6 +520,31 @@ sent after the take-over is processed exactly once.
 repositories build with warnings as errors, and consumers that are exclusive *by design* (one instance owns the address, for
 example per-pipeline command nodes) must keep compiling. The consumer list is in `CLAUDE.md`.
 
+**Exclusive by design (AB#8363).** A consumer that must stay exclusive — exactly one instance owns the command address, for
+example a command addressed to one pipeline instance — declares it with a reason instead of staying silent:
+
+```csharp
+// dynamic registration
+EndpointHandle handle = eventHubControl.RegisterCommandConsumer<ExecutePipelineRequest>(address, handler,
+    CommandConsumerOptions.ExclusiveByDesign("addressed to one pipeline instance"));
+
+// DI registration
+config.AddCommandConsumer<MyConsumer, MyRequest>("my-command",
+    CommandConsumerOptions.ExclusiveByDesign("only one scheduler may own the address"));
+```
+
+| Aspect | Behaviour |
+|---|---|
+| Topology | Identical to the classic registration of the same method: queue `{prefix}-{commandName}` (non-durable, auto-delete, exclusive), no `::shared` queue, no `::send` exchange, no bridge. Classic senders are unchanged. |
+| Deprecation warning | Not logged. Registrations without a declaration still warn exactly as before. |
+| Reason | `CommandConsumerOptions.ExclusiveByDesignReason`; must not be empty or whitespace (`ArgumentException` at registration; the factory `ExclusiveByDesign(reason)` checks it at once). Logged at `Debug` on dynamic registration. Write it for the next developer and list it in the `CLAUDE.md` audit table. |
+| Rejected combinations | `MigratesLegacyCommand` (contradiction), `LegacyProbeInterval`, `ConfigureConsumeTopology = true` (shared-topology options) — `ArgumentException`. `SuppressFaults` stays unsupported by `AddCommandConsumer`. |
+| Applied options | `PrefetchCount`, `ConcurrentMessageLimit`; `SuppressFaults` on the dynamic `RegisterCommandConsumer` only. They are consumer-side settings and do not change the queue. |
+| Compatibility | Additive: a new property and factory on `CommandConsumerOptions`, no new interface member. The dynamic registration requires the `IEventHubControl` implementation of this library (test doubles that implement the interface directly get the default `NotSupportedException` of the options overloads). |
+
+Tests: `ExclusiveByDesignCommandConsumerUnitTests` (validation, no deprecation observer, warning regression) and
+`ExclusiveByDesignCommandTests` (broker topology and logs, both registration paths).
+
 **Operations.** New broker names appear (`*::shared` queues, `*::send` exchanges). Monitoring or broker policies that match
 command queue names must include them; the classic queue disappears from a migrated service as soon as its last old replica
 is gone.

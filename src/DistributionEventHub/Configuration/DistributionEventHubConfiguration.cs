@@ -71,14 +71,7 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
         where TMessage : class
     {
         var prefixedCommandName = CacheCommon.ApplyInstancePrefix(InstancePrefix, commandName);
-        _busConfigurator.AddConsumer<DistributedConsumer<TConsumer, TMessage>>()
-            .Endpoint(c =>
-            {
-                c.Name = prefixedCommandName;
-                c.Temporary = true;
-                c.ConfigureConsumeTopology = false;
-            });
-        serviceCollection.AddScoped<TConsumer>();
+        AddClassicExclusiveCommandConsumer<TConsumer, TMessage>(prefixedCommandName, null);
 
         // Deprecation notice (AB#6909): one observer for all classic registrations, logs once at bus start.
         if (_exclusiveCommandNames.Count == 0)
@@ -104,7 +97,15 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
                 nameof(options));
         }
 
+        options.ValidateExclusiveByDesign(nameof(options));
         var prefixedCommandName = CacheCommon.ApplyInstancePrefix(InstancePrefix, commandName);
+        if (options.IsExclusiveByDesign)
+        {
+            // Exclusive by design (AB#8363): classic topology, declared with a reason, so no deprecation notice.
+            AddClassicExclusiveCommandConsumer<TConsumer, TMessage>(prefixedCommandName, options);
+            return;
+        }
+
         var sendExchangeName = CacheCommon.GetSharedCommandSendExchangeName(prefixedCommandName);
         var queueName = options.MigratesLegacyCommand
             ? CacheCommon.GetMigratedSharedCommandQueueName(prefixedCommandName)
@@ -130,6 +131,34 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
         }
     }
     
+    /// <summary>
+    ///     Classic exclusive command endpoint (<c>Temporary</c> → non-durable, auto-delete, exclusive queue). With
+    ///     exclusive-by-design options only the consumer-side limits are applied; the queue stays the same.
+    /// </summary>
+    private void AddClassicExclusiveCommandConsumer<TConsumer, TMessage>(string prefixedCommandName,
+        CommandConsumerOptions? options)
+        where TConsumer : class, IDistributedConsumer<TMessage>
+        where TMessage : class
+    {
+        _busConfigurator.AddConsumer<DistributedConsumer<TConsumer, TMessage>>()
+            .Endpoint(c =>
+            {
+                c.Name = prefixedCommandName;
+                c.Temporary = true;
+                c.ConfigureConsumeTopology = false;
+                if (options?.PrefetchCount is { } prefetchCount)
+                {
+                    c.PrefetchCount = prefetchCount;
+                }
+
+                if (options?.ConcurrentMessageLimit is { } concurrentMessageLimit)
+                {
+                    c.ConcurrentMessageLimit = concurrentMessageLimit;
+                }
+            });
+        serviceCollection.AddScoped<TConsumer>();
+    }
+
     public void AddBroadcastEventConsumer<TConsumer, TMessage>()
         where TConsumer : class, IDistributedConsumer<TMessage>
         where TMessage : class

@@ -73,6 +73,9 @@ command, register it with `new CommandConsumerOptions { MigratesLegacyCommand = 
 (`AddCommandConsumer(name, options)` or `RegisterCommandConsumer(name, handler, options)`): the senders stay unchanged, old
 (exclusive) and new (shared) replicas can run side by side during a rolling update, and the new replicas take over when the
 last old one is gone. See `docs/DEVELOPER.md` -> "Migrating exclusive command queues" for the rollout order.
+A consumer that must stay exclusive (exactly one instance owns the address) declares it with
+`CommandConsumerOptions.ExclusiveByDesign("<reason>")`: same exclusive topology, no deprecation warning; an empty reason is
+rejected (`docs/DEVELOPER.md` -> "Exclusive by design (AB#8363)").
 
 ### 4. MongoDB File Caching
 **Implementation:** `DistributedCacheService`
