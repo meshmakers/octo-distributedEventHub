@@ -53,9 +53,23 @@ internal sealed class LegacyCommandBridgeObserver(
             return;
         }
 
+        // Every bridge is stopped even if one of them fails; the failures are reported afterwards.
+        List<Exception>? failures = null;
         foreach (var bridge in bridges)
         {
-            await bridge.DisposeAsync().ConfigureAwait(false);
+            try
+            {
+                await bridge.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                (failures ??= []).Add(e);
+            }
+        }
+
+        if (failures != null)
+        {
+            throw new AggregateException("Stopping the legacy command bridges failed.", failures);
         }
     }
 
