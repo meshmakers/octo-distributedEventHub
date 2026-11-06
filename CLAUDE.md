@@ -151,6 +151,12 @@ exchange with the classic arguments (fanout, non-durable, auto-delete) and bind.
 bridge. Known windows, each bounded by the interval: after the last old replica stopped, classic commands reach no queue until
 the next pass (the sender's timeout/retry covers it, as for every restart of the former single consumer); if a classic replica
 (re)starts while the shared queue is bound (rollback), commands are copied to both until the next pass.
+Every migrated command has its own bridge. For DI registrations one `LegacyCommandBridgeObserver` per configuration owns
+the bridges of all migrated commands, because MassTransit's `AddBusObserver` keeps only one registration per observer type
+(`TryAddEnumerable`); one observer per command served only the first migrated command of a process (AB#8368, fixed in
+the release after 3.5.64; pinned by `SeveralMigratedCommandsInOneProcess_…` and
+`AddCommandConsumer_SeveralMigratedCommands_OneObserverStartsOneBridgePerCommand`). Do not register further per-command
+bus observers with `AddBusObserver`. Dynamic registrations (`RegisterCommandConsumer`) create a bridge per handle.
 
 **Rolling update (old = exclusive, new = migrating), one service at a time:**
 1. Release the event hub library (this change). No behaviour changes until a consumer opts in.
@@ -179,16 +185,17 @@ reason, or a combination with `MigratesLegacyCommand`, `LegacyProbeInterval` or 
 registration. Put the reason into the "Exclusive-by-design reason" column below; "—" means not declared yet (still warns).
 Details: `docs/DEVELOPER.md` -> "Exclusive by design (AB#8363)".
 
-**Command consumers in the monorepo** (snapshot of `main` on 2026-10-18; senders in the last column):
+**Command consumers in the monorepo** (snapshot of `main` on 2026-11-06; senders in the fifth column). Rows marked
+"pending AB#6910 bot PR" describe the state once that PR is merged; it waits for the event hub release with AB#8368.
 
 | Repository | Registration | Command (queue name) | Kind | Senders | Exclusive-by-design reason |
 |---|---|---|---|---|---|
-| octo-bot-services (`Program.cs`) | `AddCommandConsumer` (`ModelCommandsConsumer`) | `octo::bot::import-ck`, `import-ck-batch`, `import-rt`, `export-rt-by-query`, `export-rt-by-deep-graph` | exclusive, migration candidate | octo-asset-repo-services (`ModelsController`, `AddCommandClient`) | — |
-| octo-bot-services (`Program.cs`) | `AddCommandConsumer` (`RecurringJobConsumer`) | `octo::bot::remove-recurring-jobs-by-schedule-group` | exclusive, migration candidate | octo-communication-controller-services, octo-ai-services, octo-mcp-service (`AddCommandClient`) | — |
-| octo-identity-services (`Program.cs`) | `AddCommandConsumer` (`CreateIdentityDataCommandRequestConsumer`) | `octo::identity::create-identity-data` | exclusive, migration candidate | asset-repo, bot, communication-controller, ai, mcp, report (`AddCommandClient`, `DefaultConfigurationCreatorService`) | — |
-| octo-communication-sdk (`FromPipelineDataEventNode`) | `RegisterCommandConsumer` per pipeline | `pipelinedatacommand-{tenant}-dataflow-{id}-pipeline-{id}` | exclusive, addressed to one pipeline instance | `ToPipelineDataEventNode` (`GetCommandResponseAsync`) | — (to be declared by AB#8105) |
-| octo-communication-sdk (`FromExecutePipelineCommandNode`) | `RegisterCommandConsumer` per pipeline | `octo::...execute-pipeline-{tenant}-pipeline-{id}` (`PipelineQueueNames.ExecutePipelineCommand`) | exclusive, addressed to one pipeline instance | communication-controller `TriggerManagementService` (`IRoutedCommandClient`) | — (to be declared by AB#8105) |
-| octo-mesh-adapter (`FromSendNotificationNode`) | `RegisterCommandConsumer` per data flow | `octo::com-controller::send-notification-pipeline-{tenant}-data-flow-{id}` | exclusive, addressed to one data flow | communication-controller | — |
+| octo-bot-services (`Consumers/BotCommandConsumers.cs`, called from `Program.cs`) — pending AB#6910 bot PR | `AddCommandConsumer(name, CommandConsumerOptions { MigratesLegacyCommand = true })` (`ModelCommandsConsumer`) | `octo::bot::import-ck`, `import-ck-batch`, `import-rt`, `export-rt-by-query`, `export-rt-by-deep-graph` (queues `…::shared`) | shared, migrated (AB#6910) | octo-asset-repo-services (`ModelsController`, `AddCommandClient`) | n/a (shared) |
+| octo-bot-services (`Consumers/BotCommandConsumers.cs`) — pending AB#6910 bot PR | `AddCommandConsumer(name, CommandConsumerOptions { MigratesLegacyCommand = true })` (`RecurringJobConsumer`) | `octo::bot::remove-recurring-jobs-by-schedule-group` (queue `…::shared`) | shared, migrated (AB#6910) | octo-communication-controller-services, octo-ai-services, octo-mcp-service (`AddCommandClient`) | n/a (shared) |
+| octo-identity-services (`Consumers/IdentityCommandConsumers.cs`, called from `Program.cs`) | `AddCommandConsumer(name, CommandConsumerOptions { MigratesLegacyCommand = true })` (`CreateIdentityDataCommandRequestConsumer`) | `octo::identity::create-identity-data` (queue `…::shared`) | shared, migrated (AB#6910) | asset-repo, bot, communication-controller, ai, mcp, report (`AddCommandClient`, `DefaultConfigurationCreatorService`) | n/a (shared) |
+| octo-communication-sdk (`FromPipelineDataEventNode`) | `RegisterCommandConsumer` per pipeline | `pipelinedatacommand-{tenant}-dataflow-{id}-pipeline-{id}` | exclusive by design, addressed to one pipeline instance (AB#8363, AB#8105) | `ToPipelineDataEventNode` (`GetCommandResponseAsync`) | — (to be declared by AB#8105) |
+| octo-communication-sdk (`FromExecutePipelineCommandNode`) | `RegisterCommandConsumer` per pipeline | `octo::...execute-pipeline-{tenant}-pipeline-{id}` (`PipelineQueueNames.ExecutePipelineCommand`) | exclusive by design, addressed to one pipeline instance (AB#8363, AB#8105) | communication-controller `TriggerManagementService` (`IRoutedCommandClient`) | — (to be declared by AB#8105) |
+| octo-mesh-adapter (`FromSendNotificationNode`) | `RegisterCommandConsumer` per data flow | `octo::com-controller::send-notification-pipeline-{tenant}-data-flow-{id}` | exclusive by design, addressed to one data flow (AB#8363) | communication-controller | — (not declared yet) |
 | octo-common-services (`CkMethodHandlerStartupService`), octo-communication-controller-services (`PipelineMethodHost`) | `RegisterCommandConsumer(..., CommandConsumerOptions)` | CK method queues `octo::method::...` | already shared (plain topology, AB#6891/AB#5671) | CK method dispatch | n/a (shared) |
 
 ### Dependencies

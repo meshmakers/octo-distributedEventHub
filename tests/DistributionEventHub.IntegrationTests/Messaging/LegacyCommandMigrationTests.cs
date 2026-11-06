@@ -392,6 +392,101 @@ public class LegacyCommandMigrationTests(RabbitMqFixture rabbitMq) : IAsyncLifet
     }
 
     // ---------------------------------------------------------------------------------------------------------
+    // 8. several migrated commands in one process (AB#8368)
+
+    private const string CommandNameB = "migrate::cmd-b";
+    private const string CommandNameC = "migrate::cmd-c";
+
+    private static async Task<MigrationResponse> SendTypedClassicAsync<TRequest>(Replica sender, TRequest request,
+        TimeSpan? timeout = null) where TRequest : class =>
+        await sender.Provider.GetRequiredService<ICommandClient<TRequest>>()
+            .GetResponse<MigrationResponse>(request, TestContext.Current.CancellationToken,
+                timeout ?? TimeSpan.FromSeconds(10));
+
+    /// <summary>Sends probes of one command until a classic send is answered.</summary>
+    private static async Task WaitUntilClassicServedAsync<TRequest>(Replica sender, Func<int, TRequest> probe,
+        string because) where TRequest : class
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        for (var attempt = 0; DateTime.UtcNow < deadline; attempt++)
+        {
+            try
+            {
+                await SendTypedClassicAsync(sender, probe(attempt), TimeSpan.FromSeconds(1));
+                return;
+            }
+            catch (DistributionException)
+            {
+                // the bridge of this command has not bound the classic address yet
+            }
+
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+
+        Assert.Fail($"Timed out waiting until {because}");
+    }
+
+    [Fact]
+    public async Task SeveralMigratedCommandsInOneProcess_EachServesClassicSenders_EachProcessedOnce_ExclusiveByDesignUnaffected()
+    {
+        // Bot-1 and Bot-2 both run the migrated commands A and B (two shared consumers each); Bot-1 also runs C,
+        // declared exclusive by design (classic topology, one consumer). Before AB#8368 only the first migrated
+        // command of a process got a legacy bridge, so classic senders of B timed out.
+        await StartReplicaAsync("Bot-1", config =>
+        {
+            config.AddCommandConsumer<MigrationConsumer, MigrationRequest>(CommandName, SharedOptions);
+            config.AddCommandConsumer<MigrationConsumerB, MigrationRequestB>(CommandNameB, SharedOptions);
+            config.AddCommandConsumer<MigrationConsumerC, MigrationRequestC>(CommandNameC,
+                CommandConsumerOptions.ExclusiveByDesign("one consumer at a time"));
+        });
+        await StartReplicaAsync("Bot-2", config =>
+        {
+            config.AddCommandConsumer<MigrationConsumer, MigrationRequest>(CommandName, SharedOptions);
+            config.AddCommandConsumer<MigrationConsumerB, MigrationRequestB>(CommandNameB, SharedOptions);
+        });
+        var sender = await StartReplicaAsync("Sender", config =>
+        {
+            config.AddCommandClient<MigrationRequest>(CommandName, TimeSpan.FromSeconds(10));
+            config.AddCommandClient<MigrationRequestB>(CommandNameB, TimeSpan.FromSeconds(10));
+            config.AddCommandClient<MigrationRequestC>(CommandNameC, TimeSpan.FromSeconds(10));
+        });
+
+        await WaitUntilClassicServedAsync(sender, i => new MigrationRequest { Id = $"probe-a-{i}" },
+            "the bridge of command A serves classic senders");
+        await WaitUntilClassicServedAsync(sender, i => new MigrationRequestB { Id = $"probe-b-{i}" },
+            "the bridge of command B serves classic senders");
+        _ledger.Clear();
+
+        var a = Enumerable.Range(0, 30)
+            .Select(i => SendTypedClassicAsync(sender, new MigrationRequest { Id = $"a-{i}", DelayMs = 40 }));
+        var b = Enumerable.Range(0, 30)
+            .Select(i => SendTypedClassicAsync(sender, new MigrationRequestB { Id = $"b-{i}", DelayMs = 40 }));
+        var c = Enumerable.Range(0, 10)
+            .Select(i => SendTypedClassicAsync(sender, new MigrationRequestC { Id = $"c-{i}" }));
+        var responses = await Task.WhenAll(a.Concat(b).Concat(c));
+
+        responses.Should().HaveCount(70, "every classic send of every command is answered");
+        var handled = Real.ToList();
+        handled.Should().HaveCount(70);
+        handled.GroupBy(e => e.Id).Should().OnlyContain(g => g.Count() == 1, "no command may be processed twice");
+        foreach (var command in new[] { "a-", "b-" })
+        {
+            handled.Where(e => e.Id.StartsWith(command)).Select(e => e.Replica).Distinct()
+                .Should().BeEquivalentTo(["Bot-1", "Bot-2"], $"both replicas consume the shared queue of {command}");
+        }
+
+        handled.Where(e => e.Id.StartsWith("c-")).Should().OnlyContain(e => e.Replica == "Bot-1");
+
+        // command C keeps its classic exclusive topology: no bridge, no shared queue
+        var prefixedC = $"{_instancePrefix}-{CommandNameC}";
+        await using var connection = await RawConnectionAsync();
+        (await ReplyCodeOfAsync(connection, ch => ch.QueueDeclarePassiveAsync(prefixedC)))
+            .Should().Be(405, "the exclusive-by-design queue stays exclusive to Bot-1");
+        (await ReplyCodeOfAsync(connection, ch => ch.QueueDeclarePassiveAsync(prefixedC + "::shared")))
+            .Should().Be(404, "an exclusive-by-design consumer declares no shared queue");
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
     // 7. dynamic registration (IEventHubControl) with the same switch
 
     [Fact]
@@ -435,6 +530,18 @@ public record MigrationRequest
     public int DelayMs { get; init; }
 }
 
+public record MigrationRequestB
+{
+    public string Id { get; init; } = null!;
+    public int DelayMs { get; init; }
+}
+
+public record MigrationRequestC
+{
+    public string Id { get; init; } = null!;
+    public int DelayMs { get; init; }
+}
+
 public record MigrationResponse
 {
     public string Id { get; init; } = null!;
@@ -467,6 +574,31 @@ public class MigrationConsumer(MigrationLedger ledger, ReplicaIdentity replica)
             await Task.Delay(context.Message.DelayMs);
         }
 
+        await context.RespondAsync(new MigrationResponse { Id = context.Message.Id, Replica = replica.Name });
+    }
+}
+
+public class MigrationConsumerB(MigrationLedger ledger, ReplicaIdentity replica)
+    : IDistributedConsumer<MigrationRequestB>
+{
+    public async Task ConsumeAsync(IDistributedContext<MigrationRequestB> context)
+    {
+        ledger.Add(context.Message.Id, replica.Name);
+        if (context.Message.DelayMs > 0)
+        {
+            await Task.Delay(context.Message.DelayMs);
+        }
+
+        await context.RespondAsync(new MigrationResponse { Id = context.Message.Id, Replica = replica.Name });
+    }
+}
+
+public class MigrationConsumerC(MigrationLedger ledger, ReplicaIdentity replica)
+    : IDistributedConsumer<MigrationRequestC>
+{
+    public async Task ConsumeAsync(IDistributedContext<MigrationRequestC> context)
+    {
+        ledger.Add(context.Message.Id, replica.Name);
         await context.RespondAsync(new MigrationResponse { Id = context.Message.Id, Replica = replica.Name });
     }
 }
