@@ -175,16 +175,63 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
         var handle = busControl.ConnectReceiveEndpoint(prefixedCommandName,
             e =>
             {
-                if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
+                ConfigureClassicExclusiveQueue(e);
+                e.Handler<TMessage>(CreateCommandHandler(handler));
+            });
+
+        return new EndpointHandle(handle);
+    }
+
+    /// <summary>
+    ///     Classic exclusive command queue (<c>RegisterCommandConsumer(name, handler)</c>, and exclusive-by-design
+    ///     registrations): only the queue flags, the consume topology stays at the MassTransit default.
+    /// </summary>
+    private static void ConfigureClassicExclusiveQueue(IReceiveEndpointConfigurator e)
+    {
+        if (e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
+        {
+            // Matches the request client's "exchange:...?temporary=true" declaration (else 406).
+            // Note: MassTransit declares a non-durable auto-delete queue as EXCLUSIVE, so only one
+            // process at a time can consume this command name.
+            rabbitConfigurator.Durable = false;
+            rabbitConfigurator.AutoDelete = true;
+        }
+    }
+
+    /// <summary>
+    ///     Exclusive by design (AB#8363): the classic exclusive topology, declared with a reason, so no deprecation
+    ///     warning. Consumer-side settings of the options (prefetch, concurrency, fault suppression) apply; they do not
+    ///     change the queue.
+    /// </summary>
+    private EndpointHandle RegisterExclusiveByDesignCommandConsumer<TMessage>(string prefixedCommandName,
+        ExecuteDeliveredCommandHandler<TMessage> handler, CommandConsumerOptions options) where TMessage : class
+    {
+        logger.LogDebug("Command consumer '{Command}' is exclusive by design: {Reason}", prefixedCommandName,
+            options.ExclusiveByDesignReason);
+        var handle = busControl.ConnectReceiveEndpoint(prefixedCommandName,
+            e =>
+            {
+                if (options.ConcurrentMessageLimit is { } concurrentMessageLimit)
                 {
-                    // Matches the request client's "exchange:...?temporary=true" declaration (else 406).
-                    // Note: MassTransit declares a non-durable auto-delete queue as EXCLUSIVE, so only one
-                    // process at a time can consume this command name.
-                    rabbitConfigurator.Durable = false;
-                    rabbitConfigurator.AutoDelete = true;
+                    e.ConcurrentMessageLimit = concurrentMessageLimit;
                 }
 
-                e.Handler<TMessage>(CreateCommandHandler(handler));
+                if (options.SuppressFaults)
+                {
+                    e.DiscardFaultedMessages();
+                    e.DiscardSkippedMessages();
+                    e.PublishFaults = false;
+                }
+
+                ConfigureClassicExclusiveQueue(e);
+                if (options.PrefetchCount is { } prefetchCount &&
+                    e is IRabbitMqReceiveEndpointConfigurator rabbitConfigurator)
+                {
+                    rabbitConfigurator.PrefetchCount = prefetchCount;
+                }
+
+                e.Handler<TMessage>(CreateDeliveredCommandHandler(prefixedCommandName, handler,
+                    options.SuppressFaults));
             });
 
         return new EndpointHandle(handle);
@@ -203,8 +250,14 @@ internal class EventHubControl(IBusControl busControl, IBroadcastServiceAddress 
     {
         ArgumentNullException.ThrowIfNull(handler);
         ArgumentNullException.ThrowIfNull(options);
+        options.ValidateExclusiveByDesign(nameof(options));
 
         var prefixedCommandName = CacheCommon.ApplyInstancePrefix(serviceAddress.InstancePrefix, commandName);
+        if (options.IsExclusiveByDesign)
+        {
+            return RegisterExclusiveByDesignCommandConsumer(prefixedCommandName, handler, options);
+        }
+
         var sendExchangeName = CacheCommon.GetSharedCommandSendExchangeName(prefixedCommandName);
         // A command name that the classic exclusive consumer serves (or served until now) gets a distinct queue
         // name, so old and new replicas can run side by side (AB#6909); CK method endpoints keep the plain name.

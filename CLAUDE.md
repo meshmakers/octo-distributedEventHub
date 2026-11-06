@@ -172,17 +172,24 @@ The handler must be safe under competing consumers (no state shared between mess
 Operations: queues named `*::shared` and exchanges `*::send` are new names; broker policies or monitoring that match command
 queue names (Platform Ops) must include them. Details and API: `docs/DEVELOPER.md` -> "Migrating exclusive command queues".
 
+**Exclusive by design (AB#8363).** A consumer that must stay exclusive (exactly one instance owns the address) declares it
+with `CommandConsumerOptions.ExclusiveByDesign("<reason>")` on `AddCommandConsumer(name, options)` or
+`RegisterCommandConsumer(name, handler, options)`: classic exclusive topology unchanged, no deprecation warning. An empty
+reason, or a combination with `MigratesLegacyCommand`, `LegacyProbeInterval` or `ConfigureConsumeTopology`, is rejected at
+registration. Put the reason into the "Exclusive-by-design reason" column below; "—" means not declared yet (still warns).
+Details: `docs/DEVELOPER.md` -> "Exclusive by design (AB#8363)".
+
 **Command consumers in the monorepo** (snapshot of `main` on 2026-10-18; senders in the last column):
 
-| Repository | Registration | Command (queue name) | Kind | Senders |
-|---|---|---|---|---|
-| octo-bot-services (`Program.cs`) | `AddCommandConsumer` (`ModelCommandsConsumer`) | `octo::bot::import-ck`, `import-ck-batch`, `import-rt`, `export-rt-by-query`, `export-rt-by-deep-graph` | exclusive, migration candidate | octo-asset-repo-services (`ModelsController`, `AddCommandClient`) |
-| octo-bot-services (`Program.cs`) | `AddCommandConsumer` (`RecurringJobConsumer`) | `octo::bot::remove-recurring-jobs-by-schedule-group` | exclusive, migration candidate | octo-communication-controller-services, octo-ai-services, octo-mcp-service (`AddCommandClient`) |
-| octo-identity-services (`Program.cs`) | `AddCommandConsumer` (`CreateIdentityDataCommandRequestConsumer`) | `octo::identity::create-identity-data` | exclusive, migration candidate | asset-repo, bot, communication-controller, ai, mcp, report (`AddCommandClient`, `DefaultConfigurationCreatorService`) |
-| octo-communication-sdk (`FromPipelineDataEventNode`) | `RegisterCommandConsumer` per pipeline | `pipelinedatacommand-{tenant}-dataflow-{id}-pipeline-{id}` | exclusive, addressed to one pipeline instance | `ToPipelineDataEventNode` (`GetCommandResponseAsync`) |
-| octo-communication-sdk (`FromExecutePipelineCommandNode`) | `RegisterCommandConsumer` per pipeline | `octo::...execute-pipeline-{tenant}-pipeline-{id}` (`PipelineQueueNames.ExecutePipelineCommand`) | exclusive, addressed to one pipeline instance | communication-controller `TriggerManagementService` (`IRoutedCommandClient`) |
-| octo-mesh-adapter (`FromSendNotificationNode`) | `RegisterCommandConsumer` per data flow | `octo::com-controller::send-notification-pipeline-{tenant}-data-flow-{id}` | exclusive, addressed to one data flow | communication-controller |
-| octo-common-services (`CkMethodHandlerStartupService`), octo-communication-controller-services (`PipelineMethodHost`) | `RegisterCommandConsumer(..., CommandConsumerOptions)` | CK method queues `octo::method::...` | already shared (plain topology, AB#6891/AB#5671) | CK method dispatch |
+| Repository | Registration | Command (queue name) | Kind | Senders | Exclusive-by-design reason |
+|---|---|---|---|---|---|
+| octo-bot-services (`Program.cs`) | `AddCommandConsumer` (`ModelCommandsConsumer`) | `octo::bot::import-ck`, `import-ck-batch`, `import-rt`, `export-rt-by-query`, `export-rt-by-deep-graph` | exclusive, migration candidate | octo-asset-repo-services (`ModelsController`, `AddCommandClient`) | — |
+| octo-bot-services (`Program.cs`) | `AddCommandConsumer` (`RecurringJobConsumer`) | `octo::bot::remove-recurring-jobs-by-schedule-group` | exclusive, migration candidate | octo-communication-controller-services, octo-ai-services, octo-mcp-service (`AddCommandClient`) | — |
+| octo-identity-services (`Program.cs`) | `AddCommandConsumer` (`CreateIdentityDataCommandRequestConsumer`) | `octo::identity::create-identity-data` | exclusive, migration candidate | asset-repo, bot, communication-controller, ai, mcp, report (`AddCommandClient`, `DefaultConfigurationCreatorService`) | — |
+| octo-communication-sdk (`FromPipelineDataEventNode`) | `RegisterCommandConsumer` per pipeline | `pipelinedatacommand-{tenant}-dataflow-{id}-pipeline-{id}` | exclusive, addressed to one pipeline instance | `ToPipelineDataEventNode` (`GetCommandResponseAsync`) | — (to be declared by AB#8105) |
+| octo-communication-sdk (`FromExecutePipelineCommandNode`) | `RegisterCommandConsumer` per pipeline | `octo::...execute-pipeline-{tenant}-pipeline-{id}` (`PipelineQueueNames.ExecutePipelineCommand`) | exclusive, addressed to one pipeline instance | communication-controller `TriggerManagementService` (`IRoutedCommandClient`) | — (to be declared by AB#8105) |
+| octo-mesh-adapter (`FromSendNotificationNode`) | `RegisterCommandConsumer` per data flow | `octo::com-controller::send-notification-pipeline-{tenant}-data-flow-{id}` | exclusive, addressed to one data flow | communication-controller | — |
+| octo-common-services (`CkMethodHandlerStartupService`), octo-communication-controller-services (`PipelineMethodHost`) | `RegisterCommandConsumer(..., CommandConsumerOptions)` | CK method queues `octo::method::...` | already shared (plain topology, AB#6891/AB#5671) | CK method dispatch | n/a (shared) |
 
 ### Dependencies
 

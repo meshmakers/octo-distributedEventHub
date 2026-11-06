@@ -6,7 +6,8 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 /// <summary>
 ///     Deprecation notice of the classic exclusive command consumer (AB#6909). A compiler-level
 ///     <c>[Obsolete]</c> is deliberately not used: every consumer repository builds with warnings as errors, and
-///     consumers that are exclusive by design (one instance owns the address) must keep compiling.
+///     consumers that are exclusive by design (one instance owns the address) must keep compiling. Those declare it
+///     with <see cref="CommandConsumerOptions.ExclusiveByDesign" /> and are not warned about (AB#8363).
 /// </summary>
 internal static class LegacyCommandDeprecation
 {
@@ -25,8 +26,8 @@ internal static class LegacyCommandDeprecation
         logger.LogWarning(
             "Command consumer '{Command}' uses the classic EXCLUSIVE topology: only one process at a time consumes " +
             "it, further replicas wait for the owner's connection to end. Deprecated (AB#6909): register it shared " +
-            "with CommandConsumerOptions {{ MigratesLegacyCommand = true }}; keep it exclusive only if exactly one " +
-            "instance must own the address, and say why in the registering code",
+            "with CommandConsumerOptions {{ MigratesLegacyCommand = true }}; if exactly one instance must own the " +
+            "address, declare it with CommandConsumerOptions.ExclusiveByDesign(reason) (AB#8363)",
             prefixedCommandName);
     }
 
@@ -45,7 +46,8 @@ internal static class LegacyCommandDeprecation
             "{Count} command consumer(s) use the classic EXCLUSIVE topology: {Commands}. Only one process at a " +
             "time consumes each of them, further replicas wait for the owner's connection to end. Deprecated " +
             "(AB#6909): register them with AddCommandConsumer(name, new CommandConsumerOptions {{ " +
-            "MigratesLegacyCommand = true }}); keep one exclusive only if exactly one instance must own the address",
+            "MigratesLegacyCommand = true }}); if exactly one instance must own the address, declare it with " +
+            "CommandConsumerOptions.ExclusiveByDesign(reason) (AB#8363)",
             names.Count, string.Join(", ", names));
     }
 
