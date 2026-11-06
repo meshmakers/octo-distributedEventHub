@@ -489,6 +489,14 @@ replica exists it receives all classic commands (as before); as soon as the last
 All replicas run the same idempotent check, so they converge. The bridge never creates the shared queue and does not remove its
 binding on shutdown (the queue is shared and disappears with its last consumer).
 
+**One bridge per migrated command.** A service may migrate several commands (bot-services migrates six). Each migrated
+command gets its own bridge; for the DI registrations they are all started and stopped by one bus observer
+(`LegacyCommandBridgeObserver`), because MassTransit's `AddBusObserver` keeps only one registration per observer type. Up to
+event hub 3.5.64 each migrated command registered its own observer of the same type, so only the **first** migrated command
+of a process served classic senders and the others timed out (AB#8368). Use a release with the fix before migrating more
+than one command per service; `LegacyCommandMigrationTests.SeveralMigratedCommandsInOneProcess_EachServesClassicSenders_EachProcessedOnce_ExclusiveByDesignUnaffected`
+covers two migrated commands and one exclusive-by-design command in the same process.
+
 **Rollout order** (per service, no order between services, senders untouched):
 
 1. Release the library containing this change; no service behaviour changes.

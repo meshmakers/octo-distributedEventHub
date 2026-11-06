@@ -4,13 +4,18 @@ using Microsoft.Extensions.Logging;
 namespace Meshmakers.Octo.Common.DistributionEventHub.Services;
 
 /// <summary>
-///     Runs the <see cref="LegacyCommandBridge" /> of a DI-registered, migrating command consumer for as long as
-///     the bus runs (AB#6909).
+///     Runs the <see cref="LegacyCommandBridge" />s of all DI-registered, migrating command consumers for as long as
+///     the bus runs (AB#6909). One observer owns every bridge of a configuration: MassTransit's <c>AddBusObserver</c>
+///     keeps only one registration per observer type, so one observer per command would serve only the first
+///     migrated command (AB#8368).
 /// </summary>
 internal sealed class LegacyCommandBridgeObserver(
-    Func<LegacyCommandBridge> bridgeFactory) : IBusObserver
+    IReadOnlyCollection<Func<LegacyCommandBridge>> bridgeFactories) : IBusObserver
 {
-    private LegacyCommandBridge? _bridge;
+    private List<LegacyCommandBridge>? _bridges;
+
+    /// <summary>The number of bridges this observer starts (one per migrated command).</summary>
+    internal int BridgeCount => bridgeFactories.Count;
 
     public void PostCreate(IBus bus)
     {
@@ -24,8 +29,16 @@ internal sealed class LegacyCommandBridgeObserver(
 
     public Task PostStart(IBus bus, Task<BusReady> busReady)
     {
-        _bridge = bridgeFactory();
-        _bridge.Start();
+        // Assigned first so that PreStop disposes the bridges already started if a later factory throws.
+        var bridges = new List<LegacyCommandBridge>(bridgeFactories.Count);
+        _bridges = bridges;
+        foreach (var factory in bridgeFactories)
+        {
+            var bridge = factory();
+            bridges.Add(bridge);
+            bridge.Start();
+        }
+
         return Task.CompletedTask;
     }
 
@@ -33,9 +46,14 @@ internal sealed class LegacyCommandBridgeObserver(
 
     public async Task PreStop(IBus bus)
     {
-        var bridge = _bridge;
-        _bridge = null;
-        if (bridge != null)
+        var bridges = _bridges;
+        _bridges = null;
+        if (bridges == null)
+        {
+            return;
+        }
+
+        foreach (var bridge in bridges)
         {
             await bridge.DisposeAsync().ConfigureAwait(false);
         }

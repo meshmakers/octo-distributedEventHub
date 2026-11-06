@@ -17,6 +17,7 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
 {
     private readonly ServiceCollectionBusConfigurator _busConfigurator = new(serviceCollection);
     private readonly List<string> _exclusiveCommandNames = [];
+    private readonly List<Func<IServiceProvider, LegacyCommandBridge>> _legacyBridgeFactories = [];
 
     /// <summary>
     ///     Use the publishing message scheduler to schedule messages using the Hangfire scheduler
@@ -124,10 +125,19 @@ internal class DistributionEventHubConfiguration(IServiceCollection serviceColle
 
         if (options.MigratesLegacyCommand)
         {
-            serviceCollection.AddBusObserver(sp => new LegacyCommandBridgeObserver(() => new LegacyCommandBridge(
+            // AB#8368: MassTransit's AddBusObserver dedupes by implementation type (TryAddEnumerable), so a second
+            // observer of the same type would be dropped silently. One observer owns the bridges of every migrated
+            // command of this configuration; it is registered with the first one and reads the list at bus start.
+            if (_legacyBridgeFactories.Count == 0)
+            {
+                serviceCollection.AddBusObserver(sp => new LegacyCommandBridgeObserver(
+                    _legacyBridgeFactories.Select(factory => (Func<LegacyCommandBridge>)(() => factory(sp))).ToList()));
+            }
+
+            _legacyBridgeFactories.Add(sp => new LegacyCommandBridge(
                 sp.GetRequiredService<IOptions<RabbitMqTransportOptions>>().Value, prefixedCommandName, queueName,
                 options.LegacyProbeInterval,
-                sp.GetRequiredService<ILoggerFactory>().CreateLogger<LegacyCommandBridge>())));
+                sp.GetRequiredService<ILoggerFactory>().CreateLogger<LegacyCommandBridge>()));
         }
     }
     

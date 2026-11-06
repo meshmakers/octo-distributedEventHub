@@ -96,6 +96,52 @@ public class LegacyCommandMigrationUnitTests
     }
 
     [Fact]
+    public void AddCommandConsumer_SeveralMigratedCommands_OneObserverStartsOneBridgePerCommand()
+    {
+        // AB#8368: AddBusObserver keeps one registration per observer type; the bridges of all migrated commands
+        // must therefore live in one observer, otherwise only the first command serves classic senders.
+        var services = NewServices();
+
+        services.AddDistributionEventHub(config =>
+        {
+            config.UniqueServiceAddress = "svc";
+            config.AddCommandConsumer<NoopConsumer, string>("cmd-a",
+                new CommandConsumerOptions { MigratesLegacyCommand = true });
+            config.AddCommandConsumer<OtherConsumer, OtherMessage>("cmd-b",
+                new CommandConsumerOptions { MigratesLegacyCommand = true });
+            config.AddCommandConsumer<ThirdConsumer, ThirdMessage>("cmd-c",
+                new CommandConsumerOptions { MigratesLegacyCommand = true });
+        });
+
+        var observer = services.Should().ContainSingle(d => d.ServiceType == typeof(IBusObserver)).Subject;
+        using var provider = services.BuildServiceProvider();
+        var bridgeObserver = observer.ImplementationFactory!(provider).Should()
+            .BeOfType<LegacyCommandBridgeObserver>().Subject;
+        bridgeObserver.BridgeCount.Should().Be(3, "every migrated command needs its own legacy bridge");
+    }
+
+    [Fact]
+    public void AddCommandConsumer_MigratedAndSharedOnly_StartsBridgesOnlyForTheMigratedOnes()
+    {
+        var services = NewServices();
+
+        services.AddDistributionEventHub(config =>
+        {
+            config.UniqueServiceAddress = "svc";
+            config.AddCommandConsumer<NoopConsumer, string>("cmd-a",
+                new CommandConsumerOptions { MigratesLegacyCommand = true });
+            config.AddCommandConsumer<OtherConsumer, OtherMessage>("cmd-b", new CommandConsumerOptions());
+            config.AddCommandConsumer<ThirdConsumer, ThirdMessage>("cmd-c",
+                CommandConsumerOptions.ExclusiveByDesign("needs one consumer at a time"));
+        });
+
+        var observer = services.Should().ContainSingle(d => d.ServiceType == typeof(IBusObserver)).Subject;
+        using var provider = services.BuildServiceProvider();
+        observer.ImplementationFactory!(provider).Should().BeOfType<LegacyCommandBridgeObserver>()
+            .Which.BridgeCount.Should().Be(1, "only MigratesLegacyCommand gets a bridge");
+    }
+
+    [Fact]
     public void DeprecationNotice_IsLoggedOncePerCommandName_AndNamesTheMigrationSwitch()
     {
         LegacyCommandDeprecation.ResetForTests();
@@ -123,6 +169,20 @@ public class LegacyCommandMigrationUnitTests
     private sealed class NoopConsumer : IDistributedConsumer<string>
     {
         public Task ConsumeAsync(IDistributedContext<string> context) => Task.CompletedTask;
+    }
+
+    public sealed record OtherMessage;
+
+    public sealed record ThirdMessage;
+
+    private sealed class OtherConsumer : IDistributedConsumer<OtherMessage>
+    {
+        public Task ConsumeAsync(IDistributedContext<OtherMessage> context) => Task.CompletedTask;
+    }
+
+    private sealed class ThirdConsumer : IDistributedConsumer<ThirdMessage>
+    {
+        public Task ConsumeAsync(IDistributedContext<ThirdMessage> context) => Task.CompletedTask;
     }
 
     private sealed class CapturingLogger : ILogger
