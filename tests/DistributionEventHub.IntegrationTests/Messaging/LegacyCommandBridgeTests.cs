@@ -170,6 +170,120 @@ public class LegacyCommandBridgeTests(RabbitMqFixture rabbitMq) : IAsyncLifetime
         await bridge.DisposeAsync();
     }
 
+    // ---------------------------------------------------------------------------------------------------------
+    // AB#8404: back-off of the classic probe while bound
+
+    private const int FastIntervalMs = 100; // cap = 60 intervals = 6 s
+
+    private LegacyCommandBridge NewFastBridge() => new(new RabbitMqTransportOptions
+    {
+        Host = rabbitMq.Host, Port = (ushort)rabbitMq.Port, User = rabbitMq.Username, Pass = rabbitMq.Password
+    }, _legacy, Shared, TimeSpan.FromMilliseconds(FastIntervalMs), NullLogger.Instance);
+
+    /// <summary>RabbitMQ's error lines "operation queue.declare caused a channel exception not_found: no queue 'N'".</summary>
+    private async Task<int> BrokerNotFoundErrorsForClassicQueueAsync()
+    {
+        var log = await rabbitMq.GetBrokerLogAsync();
+        var needle = $"no queue '{_legacy}'";
+        var count = 0;
+        for (var i = log.IndexOf(needle, StringComparison.Ordinal); i >= 0;
+             i = log.IndexOf(needle, i + needle.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    private static async Task WaitForCapAsync(LegacyCommandBridge bridge)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (bridge.Schedule.CurrentGap < bridge.Schedule.MaxInterval && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50, TestContext.Current.CancellationToken);
+        }
+
+        bridge.Schedule.CurrentGap.Should().Be(bridge.Schedule.MaxInterval, "the bridge should have backed off fully");
+    }
+
+    [Fact]
+    public async Task BackgroundLoop_NoClassicQueue_ChannelExceptionsStayBounded()
+    {
+        await DeclareSharedQueue();
+        var window = TimeSpan.FromSeconds(12);
+        await using var bridge = NewFastBridge();
+
+        bridge.Start();
+        await Task.Delay(window, TestContext.Current.CancellationToken);
+        var probes = bridge.ClassicProbeCount;
+        await bridge.DisposeAsync();
+
+        bridge.State.Should().Be(LegacyCommandBridgeState.Bound);
+        var withoutBackOff = (int)(window / TimeSpan.FromMilliseconds(FastIntervalMs)); // 120
+        // gaps 0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6 s -> probes at 0, 0.1, 0.3, 0.7, 1.5, 3.1, 6.3, 12.3 s: 7 in 12 s
+        probes.Should().BeInRange(5, 10, "the probe backs off while bound ({0} probes without back-off)", withoutBackOff);
+
+        // The broker's own log is the metric of AB#8404: one not_found error line per probe, no more.
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        var errors = await BrokerNotFoundErrorsForClassicQueueAsync();
+        while (errors < probes && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(200, TestContext.Current.CancellationToken);
+            errors = await BrokerNotFoundErrorsForClassicQueueAsync();
+        }
+
+        errors.Should().Be(probes, "every probe of a missing classic queue is one channel exception in RabbitMQ's log");
+        errors.Should().BeLessThan(withoutBackOff / 10);
+    }
+
+    [Fact]
+    public async Task BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_StepsAsideWithinCapPlusOneInterval()
+    {
+        await DeclareSharedQueue();
+        await using var bridge = NewFastBridge();
+        bridge.Start();
+        await WaitForAsync(bridge, LegacyCommandBridgeState.Bound);
+        await WaitForCapAsync(bridge);
+
+        // a classic consumer appears, the number of shared consumers does not change: only the backed-off probe sees it
+        var appeared = DateTime.UtcNow;
+        await using var classic = await StartClassicConsumer();
+        await WaitForAsync(bridge, LegacyCommandBridgeState.LegacyConsumerPresent);
+        var reaction = DateTime.UtcNow - appeared;
+
+        var bound = bridge.Schedule.MaxInterval + bridge.Schedule.Interval;
+        reaction.Should().BeLessThanOrEqualTo(bound + TimeSpan.FromSeconds(1), "documented reaction bound (+1 s slack)");
+        (await PublishToClassicExchange()).Should().Be(0u, "after stepping aside nothing is copied to the shared queue");
+
+        // while the classic consumer is alive the bridge probes at the base interval again
+        bridge.Schedule.CurrentGap.Should().Be(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public async Task BackgroundLoop_SharedConsumerCountChanges_ProbesAtOnceDespiteTheBackOff()
+    {
+        await DeclareSharedQueue();
+        await using var bridge = NewFastBridge();
+        bridge.Start();
+        await WaitForAsync(bridge, LegacyCommandBridgeState.Bound);
+        await WaitForCapAsync(bridge);
+        var probesBefore = bridge.ClassicProbeCount;
+
+        // rollback shape: an old replica starts and a shared replica goes away (here: one comes, the count changes)
+        await using var classic = await StartClassicConsumer();
+        await using var sharedReplica = await Connect();
+        var sharedChannel = await sharedReplica.CreateChannelAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var appeared = DateTime.UtcNow;
+        await sharedChannel.BasicConsumeAsync(Shared, autoAck: true,
+            new RabbitMQ.Client.Events.AsyncEventingBasicConsumer(sharedChannel),
+            TestContext.Current.CancellationToken);
+
+        await WaitForAsync(bridge, LegacyCommandBridgeState.LegacyConsumerPresent);
+        (DateTime.UtcNow - appeared).Should().BeLessThan(bridge.Schedule.MaxInterval / 2,
+            "a changed consumer count drops the back-off on the next tick");
+        bridge.ClassicProbeCount.Should().BeGreaterThan(probesBefore);
+    }
+
     private static async Task WaitForAsync(LegacyCommandBridge bridge, LegacyCommandBridgeState expected)
     {
         var deadline = DateTime.UtcNow.AddSeconds(15);
