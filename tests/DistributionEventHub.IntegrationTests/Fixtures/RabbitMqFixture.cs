@@ -20,6 +20,13 @@ public class RabbitMqFixture : IAsyncLifetime
             .Build();
     }
 
+    /// <summary>The broker's own log (stdout and stderr of the container), e.g. to count channel exceptions.</summary>
+    public async Task<string> GetBrokerLogAsync()
+    {
+        var (stdout, stderr) = await _container.GetLogsAsync();
+        return stdout + stderr;
+    }
+
     public async ValueTask InitializeAsync()
     {
         await _container.StartAsync();

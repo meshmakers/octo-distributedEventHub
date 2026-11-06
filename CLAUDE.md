@@ -148,9 +148,18 @@ permanent binding would process each classic command twice while an old replica 
 runs the same idempotent reconcile every `LegacyProbeInterval` (default 2 s): passive declare of the classic queue (405 or
 success = alive, 404 = gone) -> alive: unbind (new replicas stand by, the old one keeps all classic traffic); gone: declare the
 exchange with the classic arguments (fanout, non-durable, auto-delete) and bind. The shared queue is never created by the
-bridge. Known windows, each bounded by the interval: after the last old replica stopped, classic commands reach no queue until
-the next pass (the sender's timeout/retry covers it, as for every restart of the former single consumer); if a classic replica
-(re)starts while the shared queue is bound (rollback), commands are copied to both until the next pass.
+bridge. **Probe back-off (AB#8404):** a passive declare of a missing queue is a channel exception that RabbitMQ logs as an
+error, and "no classic queue" is the steady state after the migration (~600k error lines per cluster and day at a fixed 2 s
+with 3.5.65). While `Bound`, the classic probe backs off 1, 2, 4, … intervals up to 60 intervals (2 min at the default;
+`LegacyProbeSchedule`, `MaxIntervalFactor`); every other state probes every interval. Between backed-off probes the bridge
+reads the consumer count of the shared queue on one reused channel (no channel exception); a changed count (rollout/rollback
+replaces replicas) probes at once and restarts the back-off. Known windows: after the last old replica stopped, classic
+commands reach no queue until the next pass (≤ one interval; the sender's timeout/retry covers it, as for every restart of the
+former single consumer); if a classic replica (re)starts while the shared queue is bound (rollback), commands are copied to
+both until the next classic probe — ≤ 61 intervals (2 min 2 s), ≤ one interval when the shared consumer count changes too.
+Tests: `LegacyProbeScheduleTests` (unit), `BackgroundLoop_NoClassicQueue_ChannelExceptionsStayBounded` (counts RabbitMQ's
+`not_found` log lines in the testcontainer), `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_…`,
+`BackgroundLoop_SharedConsumerCountChanges_…`.
 Every migrated command has its own bridge. For DI registrations one `LegacyCommandBridgeObserver` per configuration owns
 the bridges of all migrated commands, because MassTransit's `AddBusObserver` keeps only one registration per observer type
 (`TryAddEnumerable`); one observer per command served only the first migrated command of a process (AB#8368, fixed in
@@ -169,7 +178,7 @@ bus observers with `AddBusObserver`. Dynamic registrations (`RegisterCommandCons
    at every restart of the former single consumer; commands already delivered to the old replica are completed before it
    stops. Keep the termination grace period of the old pods and scale one replica at a time to keep the window small.
 5. Rollback: stop the migrated replicas first, then start the old version (otherwise commands are processed twice until the
-   next bridge pass).
+   next classic probe of the bridge, see the back-off above).
 6. After every service of the fleet runs the migrated version, senders MAY move to `CommandSendOptions` (mandatory send,
    `CommandNotRoutableException`); the classic address stays served by the bridge until the last classic sender is gone.
 

@@ -489,6 +489,28 @@ replica exists it receives all classic commands (as before); as soon as the last
 All replicas run the same idempotent check, so they converge. The bridge never creates the shared queue and does not remove its
 binding on shutdown (the queue is shared and disappears with its last consumer).
 
+**Probe interval and back-off (AB#8404).** A passive declare of a queue that does not exist makes RabbitMQ close the channel
+and log an error (`operation queue.declare caused a channel exception not_found: no queue '…'`). After the migration "no
+classic queue" is the steady state, so a fixed 2 s probe wrote one error line per migrated command, replica and 2 s
+(about 600,000 lines per cluster and day with 7 migrated commands, seen with 3.5.65). The bridge therefore probes the
+classic queue on this schedule (`LegacyProbeSchedule`):
+
+| Bridge state | Classic probe | Why |
+|---|---|---|
+| `LegacyConsumerPresent`, `SharedQueueMissing`, `Faulted`, start | every `LegacyProbeInterval` (default 2 s) | the take-over after the last old replica stopped stays within one interval: no slower hand-over, no extra loss window |
+| `Bound` (no classic queue) | after 1, 2, 4, 8, … intervals, capped at **60 intervals** (2 minutes at the default) | the steady state; ~720 probes per bridge and day instead of 43,200 (−98 %) |
+| `Bound`, consumer count of the shared queue changed | at once on the next tick, back-off restarts at one interval | a rollout or rollback replaces replicas; this is when a classic replica may appear |
+
+Between two backed-off probes the bridge reads the consumer count of the shared queue on every tick with a passive declare
+on one reused channel. The shared queue exists, so this raises no channel exception and writes nothing to the broker log.
+The classic probe keeps a fresh channel per probe on purpose: a 404/405 answer closes the channel on the broker side, so
+it cannot be reused; channel open/close is cheap and not logged as an error.
+
+**Reaction bound.** A classic consumer that appears while the bridge is bound is seen at the latest after
+`60 × LegacyProbeInterval + LegacyProbeInterval` (2 min 2 s at the default), and on the next tick (≤ one interval) when the
+number of shared consumers changes at the same time — which is what a Kubernetes rolling rollback does (a new old-version
+pod becomes ready, then a migrated pod is terminated). `LegacyProbeInterval` scales both values.
+
 **One bridge per migrated command.** A service may migrate several commands (bot-services migrates six). Each migrated
 command gets its own bridge; for the DI registrations they are all started and stopped by one bus observer
 (`LegacyCommandBridgeObserver`), because MassTransit's `AddBusObserver` keeps only one registration per observer type. Up to
@@ -511,7 +533,9 @@ covers two migrated commands and one exclusive-by-design command in the same pro
 with that non-durable queue; delivered commands are completed first. This is identical to a restart of the former single
 consumer. (b) Between the stop of the last old replica and the next bridge pass (<= `LegacyProbeInterval`) classic commands
 reach no queue; the sender's timeout/retry covers it. (c) In a rollback where an old replica starts while the shared queue is
-bound, commands are processed twice for <= one interval. `LegacyCommandMigrationTests` proves: no command is processed twice
+bound, commands are processed twice until the bridge's next classic probe: on the next tick when the number of shared
+consumers changes (rolling rollback), otherwise at the latest after the reaction bound above (2 min 2 s by default) — stop the
+migrated replicas first to avoid it. `LegacyCommandMigrationTests` proves: no command is processed twice
 in the rolling-update scenario, no command is processed twice after the bridge stepped aside in a rollback, and everything
 sent after the take-over is processed exactly once.
 
@@ -523,6 +547,8 @@ sent after the take-over is processed exactly once.
 | Classic exchange exists with other arguments (for example durable) | bridge `Faulted`, WARN log; the shared queue still serves `::send`; recovers when the exchange is removed | `ClassicExchangeWithOtherArguments_FaultsWithoutThrowing_AndRecoversWhenItIsRemoved` |
 | Broker unreachable for the bridge | bridge `Faulted`, retries every interval, never throws | `BrokerUnreachable_ReconcileFaultsWithoutThrowing` |
 | Shared queue not declared yet | `SharedQueueMissing`, retried; the bridge never creates the queue | `SharedQueueDoesNotExistYet_ReportsMissing_AndDoesNotCreateIt` |
+| No classic queue for a long time (steady state) | probe backs off to 60 intervals; one RabbitMQ `not_found` error line per probe, no more | `BackgroundLoop_NoClassicQueue_ChannelExceptionsStayBounded`, `LegacyProbeScheduleTests` |
+| Classic consumer appears while backed off | steps aside within 60 intervals + 1, at once if the shared consumer count changes | `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_StepsAsideWithinCapPlusOneInterval`, `BackgroundLoop_SharedConsumerCountChanges_ProbesAtOnceDespiteTheBackOff` |
 
 **Deprecation.** The classic registrations log one warning per command name and process. No `[Obsolete]` attribute: all consumer
 repositories build with warnings as errors, and consumers that are exclusive *by design* (one instance owns the address, for

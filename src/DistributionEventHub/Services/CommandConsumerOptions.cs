@@ -61,7 +61,10 @@ public sealed record CommandConsumerOptions
     /// <summary>
     ///     Interval of the check whether a classic exclusive consumer is alive (only with
     ///     <see cref="MigratesLegacyCommand" />). Bounds the take-over delay after the last old replica stopped.
-    ///     <c>null</c> uses 2 seconds.
+    ///     <c>null</c> uses 2 seconds. While the shared queue serves classic senders (no classic queue) the check backs
+    ///     off from one to 60 intervals, because every check of a missing queue is an error line in RabbitMQ's log; a
+    ///     classic consumer appearing then is seen within 61 intervals, or on the next interval when the consumer count
+    ///     of the shared queue changes (AB#8404, <c>docs/DEVELOPER.md</c> → "Probe interval and back-off").
     /// </summary>
     public TimeSpan? LegacyProbeInterval { get; init; }
 

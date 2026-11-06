@@ -1330,6 +1330,8 @@ public class IsolationTestConsumer : IDistributedConsumer<IsolationTestMessage>
 | `Premise_SameNameSharedTopology_ConflictsWithTheClassicQueueAndExchange` | documents why the shared queue needs its own name (405 on the queue, 406 on the exchange) |
 | `DynamicRegistration_WithMigrationSwitch_SharesTheQueue_AndServesClassicSenders` | `RegisterCommandConsumer(..., options)` with the switch; disposing a handle leaves the other serving |
 | bridge: `NoClassicConsumer_BindsSharedQueueToClassicExchange_AndClassicTrafficArrives`, `ClassicConsumerAlive_DoesNotBind_...`, `ClassicConsumerStartsWhileBound_BridgeUnbinds`, `ClassicExchangeWithOtherArguments_...`, `BrokerUnreachable_...`, `BackgroundLoop_FollowsTheClassicConsumer_AndDisposeIsIdempotent` | the reconcile state machine and its failure cases |
+| bridge back-off (AB#8404): `BackgroundLoop_NoClassicQueue_ChannelExceptionsStayBounded`, `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_StepsAsideWithinCapPlusOneInterval`, `BackgroundLoop_SharedConsumerCountChanges_ProbesAtOnceDespiteTheBackOff` | with no classic queue the RabbitMQ `not_found` log lines equal the probe count and stay far below the fixed-interval rate; a classic consumer is still seen within 61 intervals, at once when the shared consumer count changes |
+| unit `LegacyProbeScheduleTests` (AB#8404) | gaps 1, 2, 4, … up to 60 intervals while bound; full speed in every other state; reaction bound; < 5 % of the former probes per day |
 | unit | switch is off by default; queue naming; interface default implementation; `SuppressFaults` rejected; endpoint definition only with options; deprecation logged once per name |
 
 ## Test Infrastructure

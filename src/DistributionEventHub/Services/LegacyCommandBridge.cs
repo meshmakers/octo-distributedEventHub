@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MassTransit;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
@@ -56,10 +57,21 @@ internal enum LegacyCommandBridgeState
 ///         shared consumer run the same idempotent reconcile, so they converge on one state.
 ///     </para>
 ///     <para>
-///         Known windows, both bounded by the pass interval: after the last classic replica stopped, classic
-///         senders reach no queue until the next pass; if a classic replica (re)starts while the shared queue is
-///         bound (rollback), messages are copied to both until the next pass. Roll back by stopping the shared
-///         replicas first.
+///         <b>Back-off while bound (AB#8404).</b> A passive declare of a missing queue makes RabbitMQ close the channel
+///         and log an error, and "no classic queue" is the steady state after the migration. While the bridge is
+///         <see cref="LegacyCommandBridgeState.Bound" />, the classic probe therefore backs off (see
+///         <see cref="LegacyProbeSchedule" />: one interval, doubling, capped at 60 intervals = 2 minutes by default).
+///         On every tick in between, the bridge reads the consumer count of the shared queue on a reused channel (the
+///         queue exists, so this raises no channel exception); a changed count — a rollout or rollback replaces
+///         replicas — drops the back-off and probes at once. Every other state probes at the base interval.
+///     </para>
+///     <para>
+///         Known windows: after the last classic replica stopped, classic senders reach no queue until the next pass
+///         (bounded by the interval: the bridge is not bound then, so it does not back off); if a classic replica
+///         (re)starts while the shared queue is bound (rollback), messages are copied to both until the next classic
+///         probe — at the latest after <see cref="LegacyProbeSchedule.MaxInterval" /> plus one interval, at once on
+///         the next tick when the number of shared consumers changes at the same time. Roll back by stopping the
+///         shared replicas first.
 ///     </para>
 /// </remarks>
 internal sealed class LegacyCommandBridge : IAsyncDisposable
@@ -76,7 +88,12 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
     private readonly ILogger _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _stopping = new();
+    private readonly LegacyProbeSchedule _schedule;
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
     private IConnection? _connection;
+    private IChannel? _infoChannel;
+    private uint? _sharedConsumerCount;
+    private int _classicProbeCount;
     private Task? _loop;
     private int _disposed;
 
@@ -93,11 +110,18 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
         _sharedQueue = sharedQueue;
         _clientName = $"{sharedQueue}-legacy-bridge";
         _interval = interval is { } i && i > TimeSpan.Zero ? i : DefaultInterval;
+        _schedule = new LegacyProbeSchedule(_interval);
         _logger = logger;
     }
 
     /// <summary>Result of the last reconcile pass.</summary>
     public LegacyCommandBridgeState State { get; private set; }
+
+    /// <summary>Number of passive declares of the classic queue so far (each 404 is one RabbitMQ channel exception).</summary>
+    internal int ClassicProbeCount => Volatile.Read(ref _classicProbeCount);
+
+    /// <summary>The probe schedule of the background loop (read by tests).</summary>
+    internal LegacyProbeSchedule Schedule => _schedule;
 
     /// <summary>Starts the background reconcile loop (idempotent).</summary>
     public void Start()
@@ -115,8 +139,51 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
         using var timer = new PeriodicTimer(_interval);
         do
         {
-            await ReconcileAsync(cancellationToken).ConfigureAwait(false);
+            var now = _clock.Elapsed;
+            if (!_schedule.IsDue(now))
+            {
+                if (!await SharedConsumerCountChangedAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    continue;
+                }
+
+                _logger.LogDebug(
+                    "Legacy command bridge '{SharedQueue}': the consumer count of the shared queue changed; " +
+                    "probing the classic queue now instead of in {Gap}", _sharedQueue, _schedule.CurrentGap);
+                _schedule.ProbeNow();
+            }
+
+            var state = await ReconcileAsync(cancellationToken).ConfigureAwait(false);
+            _schedule.Record(state, now);
         } while (await WaitForNextTickAsync(timer, cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>
+    ///     Cheap check between two backed-off classic probes: reads the consumer count of the shared queue. Never throws;
+    ///     any doubt (queue gone, broker problem) counts as a change, so the full reconcile runs.
+    /// </summary>
+    private async Task<bool> SharedConsumerCountChangedAsync(CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var previous = _sharedConsumerCount;
+            var current = await GetSharedConsumerCountAsync(await GetConnectionAsync(cancellationToken)
+                .ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+            return current == null || current != previous;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+        catch (Exception)
+        {
+            return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     private static async Task<bool> WaitForNextTickAsync(PeriodicTimer timer, CancellationToken cancellationToken)
@@ -189,8 +256,14 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
     ///     405 (exclusive queue of another connection) and a successful declare both mean "a classic consumer
     ///     exists"; 404 means it does not.
     /// </summary>
+    /// <remarks>
+    ///     A fresh channel per probe on purpose: a 404 or 405 answer closes the channel on the broker side, so it
+    ///     could not be reused anyway. Channel open/close is cheap and not logged as an error; the cost of the probe
+    ///     is RabbitMQ's error line for the channel exception, which <see cref="LegacyProbeSchedule" /> bounds.
+    /// </remarks>
     private async Task<bool> ClassicQueueExistsAsync(IConnection connection, CancellationToken cancellationToken)
     {
+        Interlocked.Increment(ref _classicProbeCount);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         try
@@ -226,17 +299,9 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
     private async Task<LegacyCommandBridgeState> BindAsync(IConnection connection, CancellationToken cancellationToken)
     {
         // The shared queue is declared by its own endpoint; never create it here with guessed arguments.
-        await using (var probe = await connection.CreateChannelAsync(cancellationToken: cancellationToken)
-                         .ConfigureAwait(false))
+        if (await GetSharedConsumerCountAsync(connection, cancellationToken).ConfigureAwait(false) == null)
         {
-            try
-            {
-                await probe.QueueDeclarePassiveAsync(_sharedQueue, cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationInterruptedException e) when (e.ShutdownReason?.ReplyCode == 404)
-            {
-                return LegacyCommandBridgeState.SharedQueueMissing;
-            }
+            return LegacyCommandBridgeState.SharedQueueMissing;
         }
 
         await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken)
@@ -266,6 +331,52 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    ///     Passive declare of the shared queue on a reused channel; returns its consumer count, or <c>null</c> when the
+    ///     queue does not exist (the broker then closed the channel; the next call opens a new one). The result is
+    ///     remembered for <see cref="SharedConsumerCountChangedAsync" />. Caller holds <see cref="_gate" />.
+    /// </summary>
+    private async Task<uint?> GetSharedConsumerCountAsync(IConnection connection, CancellationToken cancellationToken)
+    {
+        if (_infoChannel is not { IsOpen: true })
+        {
+            await DisposeInfoChannelAsync().ConfigureAwait(false);
+            _infoChannel = await connection.CreateChannelAsync(cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        try
+        {
+            var ok = await _infoChannel.QueueDeclarePassiveAsync(_sharedQueue, cancellationToken).ConfigureAwait(false);
+            _sharedConsumerCount = ok.ConsumerCount;
+        }
+        catch (OperationInterruptedException e) when (e.ShutdownReason?.ReplyCode == 404)
+        {
+            _sharedConsumerCount = null;
+        }
+
+        return _sharedConsumerCount;
+    }
+
+    private async Task DisposeInfoChannelAsync()
+    {
+        var channel = _infoChannel;
+        _infoChannel = null;
+        if (channel == null)
+        {
+            return;
+        }
+
+        try
+        {
+            await channel.DisposeAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            // best effort
+        }
+    }
+
     private void LogTransition(LegacyCommandBridgeState from, LegacyCommandBridgeState to)
     {
         switch (to)
@@ -279,7 +390,9 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
             case LegacyCommandBridgeState.Bound:
                 _logger.LogInformation(
                     "Legacy command bridge '{SharedQueue}': no classic consumer of '{Legacy}'; the shared queue " +
-                    "now also serves classic senders (was {From})", _sharedQueue, _legacyName, from);
+                    "now also serves classic senders (was {From}). The classic queue is re-checked with back-off up " +
+                    "to every {MaxInterval}, and at once when the consumer count of the shared queue changes",
+                    _sharedQueue, _legacyName, from, _schedule.MaxInterval);
                 break;
             default:
                 _logger.LogDebug("Legacy command bridge '{SharedQueue}': {From} -> {To}", _sharedQueue, from, to);
@@ -318,6 +431,7 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
 
     private async Task ResetConnectionAsync()
     {
+        await DisposeInfoChannelAsync().ConfigureAwait(false);
         var connection = _connection;
         _connection = null;
         if (connection == null)
