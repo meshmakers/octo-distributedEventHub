@@ -946,3 +946,36 @@ Example with `InstancePrefix = "prod"`:
 - Broadcast: `prod:octo::service::UserService-abc123`
 - Routed: `prod:data-processor`
 - Command: `prod:get-user`
+
+---
+
+## Broker permissions: the restricted adapter user (AB#7338)
+
+Adapter pods and edge sites connect with their own broker user (`octo-adapter-mq-user`), not with the core services' user. It can do
+everything on vhost `/` except on resources whose **name contains `octo::method::`** (CK method queues, their `::send` exchanges
+and the endpoint exchanges of the same name; `CkMethodQueueNames.Prefix`) and except publishing to the default exchange
+`amq.default`. Reason: CK method calls carry parameters (for example a new password) and the caller's forwarded access token; whoever
+may read a method queue receives a share of the calls.
+
+What this means for code that runs in an adapter (or any process that connects with this user):
+
+* Do not register a command consumer or send a command whose name starts with `octo::method::`; the broker refuses the queue
+  (`ACCESS_REFUSED`, the endpoint never becomes ready). Everything else (classic and shared commands, routed events, broadcast
+  events, topic exchanges, the `::shared` migration queue, fault suppression) works as with the core user.
+* Real names are `{instance prefix}-octo::method::...` (the hub prepends the lower-cased instance prefix and a dash), so a permission
+  pattern must not be anchored on `octo::method::` at the start. RabbitMQ matches the patterns unanchored; the deployed patterns are
+  `configure`/`read`: `^(?!.*octo::method::).*$` and `write`: `^(?!amq[.]default$)(?!.*octo::method::).*$`.
+* Do not publish to the default exchange (empty exchange name, routing key = queue name): it bypasses queue-level checks, which is why
+  the adapter user has no write permission on `amq.default`. Always send through a named exchange (`SendToExchangeAsync`, the
+  `::send` exchange of shared commands, MassTransit endpoints).
+
+The permissions are deployed by meshmakers-infrastructure (`rabbitmq_adapter_user_defaults`, runbook
+`docs/runbooks/rabbitmq-adapter-user.md` there) and by octo-tools (local brokers). `RestrictedAdapterUserTests` proves them on a real
+broker: the adapter bus works (shared, exclusive-by-design, routed event), and consume, get, bind, declare, delete, purge and publish
+on a method queue, its send exchange and via the default exchange are refused while a core-user handler keeps serving.
+`RestrictedAdapterUser` (tests/.../Fixtures) holds the same three patterns; change them in all three places together.
+
+Run the integration suite as the adapter user: `OCTO_DEH_IT_AS_ADAPTER=1 dotnet test tests/DistributionEventHub.IntegrationTests --filter "FullyQualifiedName!~Mongo&FullyQualifiedName!~CommandDeliveryTests&FullyQualifiedName!~CommandSendOptionsTests"`.
+`CommandDeliveryTests` and `CommandSendOptionsTests` use `octo::method::` command names on purpose (they test the CK method topology), so
+they need the core user and crash the test host as the adapter user. Every other broker test passes as the adapter user (51 tests on
+2026-11-07: shared, exclusive, migrating and routed commands, topic exchanges, broadcast events, legacy bridge).

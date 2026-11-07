@@ -79,6 +79,13 @@ implementations that throw `NotSupportedException`, so existing test doubles of 
 is a separate story. A send right after `RegisterCommandConsumer` without `WaitUntilReadyAsync` is either delivered
 or fails with `CommandNotRoutableException` (never a silent timeout; `SendRightAfterRegistration_*` test).
 
+### Restricted adapter broker user (AB#7338)
+
+Adapters and edge sites connect with a broker user that is refused on every resource whose name contains `octo::method::` and on the
+default exchange (details and the three patterns: `docs/DEVELOPER.md`, "Broker permissions"). `RestrictedAdapterUserTests` proves it
+(consume/get/bind/declare/delete/purge/publish refused, the adapter bus works). Names of the hub are `{prefix}-{name}`, so permission
+patterns must not be start-anchored on `octo::method::`. `OCTO_DEH_IT_AS_ADAPTER=1` runs the integration suite as the adapter user (filter in `docs/DEVELOPER.md`; the two classes with `octo::method::` names need the core user).
+
 ### Key Interfaces
 
 - `IDistributionEventHubService` - Main service for publishing/sending events

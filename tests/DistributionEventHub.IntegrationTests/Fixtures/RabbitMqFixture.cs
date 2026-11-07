@@ -9,8 +9,26 @@ public class RabbitMqFixture : IAsyncLifetime
 
     public string Host => _container.Hostname;
     public int Port => _container.GetMappedPublicPort(5672);
-    public string Username => "guest";
-    public string Password => "guest";
+    /// <summary>
+    ///     The user the tests connect as. <c>guest</c> (full permissions, like the core services' <c>octo-mq-user</c>) unless
+    ///     the environment variable <c>OCTO_DEH_IT_AS_ADAPTER</c> is <c>1</c>: then the whole suite runs as the restricted
+    ///     adapter user (AB#7338) — every test that uses no <c>octo::method::</c> name must still pass.
+    /// </summary>
+    public string Username => RunAsAdapter ? AdapterUsername : "guest";
+
+    public string Password => RunAsAdapter ? AdapterPassword : "guest";
+
+    /// <summary>A user with full permissions (the core services' broker user), whatever <see cref="Username" /> is.</summary>
+    public string CoreUsername => "guest";
+
+    public string CorePassword => "guest";
+
+    /// <summary>The restricted adapter user (permissions of <see cref="RestrictedAdapterUser" />).</summary>
+    public string AdapterUsername => RestrictedAdapterUser.Name;
+
+    public string AdapterPassword => "adapter-it-throwaway";
+
+    private static bool RunAsAdapter => Environment.GetEnvironmentVariable("OCTO_DEH_IT_AS_ADAPTER") == "1";
 
     public RabbitMqFixture()
     {
@@ -30,6 +48,7 @@ public class RabbitMqFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         await _container.StartAsync();
+        await RestrictedAdapterUser.CreateAsync(_container, AdapterPassword);
     }
 
     public async ValueTask DisposeAsync()
