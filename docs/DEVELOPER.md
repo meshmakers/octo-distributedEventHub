@@ -506,6 +506,34 @@ on one reused channel. The shared queue exists, so this raises no channel except
 The classic probe keeps a fresh channel per probe on purpose: a 404/405 answer closes the channel on the broker side, so
 it cannot be reused; channel open/close is cheap and not logged as an error.
 
+**No RabbitMQ errors in the steady state (AB#8408).** The back-off bounds the errors *per bridge*, but one bridge runs per
+migrated command and per replica, so the rate still grew with the replica count (test-2 with two identity and two bot
+replicas: 0.233 ERROR lines/s, above the 0.2/s threshold of `ApplicationErrorLogRateHigh`). The bridge therefore picks the
+kind of classic probe by state (`LegacyClassicProbe`):
+
+| Bridge state before the pass | Classic probe | Broker log |
+|---|---|---|
+| `Bound` (the last probe found no classic queue) | **mandatory publish** of a probe message to the default exchange, routing key = classic queue name, on a channel with publisher confirms: returned (`basic.return`, NO_ROUTE) = no queue, routed = classic queue exists | nothing — a return is normal protocol |
+| start (`Unknown`), `LegacyConsumerPresent`, `Faulted` | passive declare (as before) | one `not_found` (404) or `resource_locked` (405) error pair per probe |
+| shared queue missing | none — nothing to bind or unbind until the shared endpoint declared its queue | nothing |
+
+So a bridge writes at most one error pair when it starts and none in the steady state, independent of the number of
+replicas. The passive declare stays where the classic queue may well exist: during a migration rollout the old replica must
+not receive probe messages. A routed probe reaches a classic consumer only when one appeared while the bridge was bound
+(rollback), once per detection; it is transient, carries `expiration: 0` and a MassTransit envelope of a message type no
+consumer handles (`urn:message:Meshmakers.Octo.Common.DistributionEventHub:LegacyCommandBridgeProbe`), so a classic
+MassTransit endpoint skips it rather than faulting, and it does not stay in a queue without a consumer.
+
+Publishing to the default exchange needs write permission on `amq.default`. The core services' broker user has it; the
+restricted adapter user (AB#7338) does not. When the broker refuses the publish (403 ACCESS_REFUSED, one error line) the
+bridge logs a WARN and uses the passive declare with the back-off above for the rest of its lifetime.
+
+Alternatives considered: the management HTTP API (`GET /api/queues/{vhost}/{name}` answers 404 without a channel error, but
+needs the management endpoint, port and a user tag in every environment), "stop probing after N absent probes until restart"
+(a rollback would then process every classic command twice until the next restart) and a per-service switch that turns the
+bridge off once the migration is done (a config change per environment and a decision per service; still possible later on
+top of this).
+
 **Reaction bound.** A classic consumer that appears while the bridge is bound is seen at the latest after
 `60 × LegacyProbeInterval + LegacyProbeInterval` (2 min 2 s at the default), and on the next tick (≤ one interval) when the
 number of shared consumers changes at the same time — which is what a Kubernetes rolling rollback does (a new old-version
@@ -547,7 +575,10 @@ sent after the take-over is processed exactly once.
 | Classic exchange exists with other arguments (for example durable) | bridge `Faulted`, WARN log; the shared queue still serves `::send`; recovers when the exchange is removed | `ClassicExchangeWithOtherArguments_FaultsWithoutThrowing_AndRecoversWhenItIsRemoved` |
 | Broker unreachable for the bridge | bridge `Faulted`, retries every interval, never throws | `BrokerUnreachable_ReconcileFaultsWithoutThrowing` |
 | Shared queue not declared yet | `SharedQueueMissing`, retried; the bridge never creates the queue | `SharedQueueDoesNotExistYet_ReportsMissing_AndDoesNotCreateIt` |
-| No classic queue for a long time (steady state) | probe backs off to 60 intervals; one RabbitMQ `not_found` error line per probe, no more | `BackgroundLoop_NoClassicQueue_ChannelExceptionsStayBounded`, `LegacyProbeScheduleTests` |
+| No classic queue for a long time (steady state) | probe backs off to 60 intervals and is a mandatory publish: no RabbitMQ error after the first pass, also with several replicas | `BackgroundLoop_NoClassicQueue_TwoReplicas_NoRecurringChannelExceptions`, `LegacyProbeScheduleTests`, `LegacyClassicProbeTests` |
+| Classic consumer appears while bound | the publish probe is routed, the bridge unbinds; the probe expires in the classic queue | `Bound_ClassicConsumerAppears_PublishProbeSeesIt_WithoutChannelException_AndLeavesNoMessage` |
+| Broker user may not write to `amq.default` | one 403, WARN log, passive declare with back-off from then on | `UserWithoutDefaultExchangeWrite_FallsBackToPassiveDeclare_AndStillStepsAside` |
+| Shared queue missing | the classic queue is not probed | `SharedQueueMissing_DoesNotProbeTheClassicQueue` |
 | Classic consumer appears while backed off | steps aside within 60 intervals + 1, at once if the shared consumer count changes | `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_StepsAsideWithinCapPlusOneInterval`, `BackgroundLoop_SharedConsumerCountChanges_ProbesAtOnceDespiteTheBackOff` |
 
 **Deprecation.** The classic registrations log one warning per command name and process. No `[Obsolete]` attribute: all consumer

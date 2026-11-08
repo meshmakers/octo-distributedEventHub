@@ -351,6 +351,12 @@ public class LegacyCommandMigrationTests(RabbitMqFixture rabbitMq) : IAsyncLifet
         responses.Should().OnlyContain(r => r.Replica == "Old-1");
         Real.GroupBy(e => e.Id).Should().OnlyContain(g => g.Count() == 1, "no duplicate after the bridge stepped aside");
         Real.Should().HaveCount(20);
+
+        // AB#8408: the bridge saw the classic replica with its publish probe, which was routed into the live classic
+        // endpoint; MassTransit must not fault on it (no error queue for the classic endpoint)
+        await using var connection = await RawConnectionAsync();
+        (await ReplyCodeOfAsync(connection, c => c.QueueDeclarePassiveAsync($"{Prefixed}_error"))).Should().Be(404,
+            "the probe is an unhandled message type, not a faulting message");
     }
 
     // ---------------------------------------------------------------------------------------------------------

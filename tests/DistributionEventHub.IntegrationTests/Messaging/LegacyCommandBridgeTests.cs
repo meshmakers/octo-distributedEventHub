@@ -175,10 +175,15 @@ public class LegacyCommandBridgeTests(RabbitMqFixture rabbitMq) : IAsyncLifetime
 
     private const int FastIntervalMs = 100; // cap = 60 intervals = 6 s
 
-    private LegacyCommandBridge NewFastBridge() => new(new RabbitMqTransportOptions
+    private LegacyCommandBridge NewFastBridge() => NewFastBridge(rabbitMq.Username, rabbitMq.Password);
+
+    private LegacyCommandBridge NewFastBridge(string user, string password) => new(new RabbitMqTransportOptions
     {
-        Host = rabbitMq.Host, Port = (ushort)rabbitMq.Port, User = rabbitMq.Username, Pass = rabbitMq.Password
+        Host = rabbitMq.Host, Port = (ushort)rabbitMq.Port, User = user, Pass = password
     }, _legacy, Shared, TimeSpan.FromMilliseconds(FastIntervalMs), NullLogger.Instance);
+
+    /// <summary>A bridge whose broker user may publish to the default exchange (the core services' user).</summary>
+    private LegacyCommandBridge NewCoreBridge() => NewFastBridge(rabbitMq.CoreUsername, rabbitMq.CorePassword);
 
     /// <summary>RabbitMQ's error lines "operation queue.declare caused a channel exception not_found: no queue 'N'".</summary>
     private async Task<int> BrokerNotFoundErrorsForClassicQueueAsync()
@@ -206,34 +211,117 @@ public class LegacyCommandBridgeTests(RabbitMqFixture rabbitMq) : IAsyncLifetime
         bridge.Schedule.CurrentGap.Should().Be(bridge.Schedule.MaxInterval, "the bridge should have backed off fully");
     }
 
-    [Fact]
-    public async Task BackgroundLoop_NoClassicQueue_ChannelExceptionsStayBounded()
+    /// <summary>Polls the broker log until it shows at least <paramref name="expected" /> errors (or 10 s passed).</summary>
+    private async Task<int> WaitForBrokerErrorsAsync(int expected)
     {
-        await DeclareSharedQueue();
-        var window = TimeSpan.FromSeconds(12);
-        await using var bridge = NewFastBridge();
-
-        bridge.Start();
-        await Task.Delay(window, TestContext.Current.CancellationToken);
-        var probes = bridge.ClassicProbeCount;
-        await bridge.DisposeAsync();
-
-        bridge.State.Should().Be(LegacyCommandBridgeState.Bound);
-        var withoutBackOff = (int)(window / TimeSpan.FromMilliseconds(FastIntervalMs)); // 120
-        // gaps 0.1, 0.2, 0.4, 0.8, 1.6, 3.2, 6 s -> probes at 0, 0.1, 0.3, 0.7, 1.5, 3.1, 6.3, 12.3 s: 7 in 12 s
-        probes.Should().BeInRange(5, 10, "the probe backs off while bound ({0} probes without back-off)", withoutBackOff);
-
-        // The broker's own log is the metric of AB#8404: one not_found error line per probe, no more.
         var deadline = DateTime.UtcNow.AddSeconds(10);
         var errors = await BrokerNotFoundErrorsForClassicQueueAsync();
-        while (errors < probes && DateTime.UtcNow < deadline)
+        while (errors < expected && DateTime.UtcNow < deadline)
         {
             await Task.Delay(200, TestContext.Current.CancellationToken);
             errors = await BrokerNotFoundErrorsForClassicQueueAsync();
         }
 
-        errors.Should().Be(probes, "every probe of a missing classic queue is one channel exception in RabbitMQ's log");
-        errors.Should().BeLessThan(withoutBackOff / 10);
+        return errors;
+    }
+
+    // ---------------------------------------------------------------------------------------------------------
+    // AB#8408: no channel exceptions in the steady state, independent of the number of replicas
+
+    [Fact]
+    public async Task BackgroundLoop_NoClassicQueue_TwoReplicas_NoRecurringChannelExceptions()
+    {
+        await DeclareSharedQueue();
+        var window = TimeSpan.FromSeconds(12);
+        await using var replica1 = NewCoreBridge();
+        await using var replica2 = NewCoreBridge();
+
+        replica1.Start();
+        replica2.Start();
+        await WaitForAsync(replica1, LegacyCommandBridgeState.Bound);
+        await WaitForAsync(replica2, LegacyCommandBridgeState.Bound);
+        var errorsAfterStart = await WaitForBrokerErrorsAsync(2);
+
+        await Task.Delay(window, TestContext.Current.CancellationToken);
+        await replica1.DisposeAsync();
+        await replica2.DisposeAsync();
+
+        // The broker's own log is the metric of AB#8408: one not_found error per bridge start, none afterwards.
+        errorsAfterStart.Should().Be(2, "each bridge's first probe is a passive declare");
+        await Task.Delay(1000, TestContext.Current.CancellationToken); // let the broker flush its log
+        (await BrokerNotFoundErrorsForClassicQueueAsync()).Should().Be(errorsAfterStart,
+            "while bound the bridges probe with a mandatory publish, which RabbitMQ does not log as an error");
+
+        foreach (var replica in new[] { replica1, replica2 })
+        {
+            replica.State.Should().Be(LegacyCommandBridgeState.Bound);
+            replica.DeclareProbeCount.Should().Be(1);
+            replica.PublishProbeCount.Should().BeGreaterThanOrEqualTo(5, "the classic queue is still checked while bound");
+            replica.PublishProbeUnavailable.Should().BeFalse();
+        }
+    }
+
+    [Fact]
+    public async Task Bound_ClassicConsumerAppears_PublishProbeSeesIt_WithoutChannelException_AndLeavesNoMessage()
+    {
+        await DeclareSharedQueue();
+        await using var bridge = NewCoreBridge();
+        (await bridge.ReconcileAsync(TestContext.Current.CancellationToken)).Should().Be(LegacyCommandBridgeState.Bound);
+
+        await using var classic = await StartClassicConsumer();
+        (await bridge.ReconcileAsync(TestContext.Current.CancellationToken))
+            .Should().Be(LegacyCommandBridgeState.LegacyConsumerPresent);
+
+        bridge.DeclareProbeCount.Should().Be(1, "only the first pass (state Unknown) used the passive declare");
+        bridge.PublishProbeCount.Should().Be(1);
+
+        // the probe expires in the classic queue (no consumer attached; RabbitMQ drops it from the head of the queue
+        // shortly after), nothing is left behind
+        var owner = await classic.CreateChannelAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        uint waiting;
+        while ((waiting = (await owner.QueueDeclarePassiveAsync(_legacy, TestContext.Current.CancellationToken))
+                   .MessageCount) > 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+
+        waiting.Should().Be(0u, "the probe message carries expiration 0");
+
+        (await PublishToClassicExchange()).Should().Be(0u, "the bridge stepped aside");
+    }
+
+    [Fact]
+    public async Task SharedQueueMissing_DoesNotProbeTheClassicQueue()
+    {
+        await using var bridge = NewCoreBridge();
+
+        (await bridge.ReconcileAsync(TestContext.Current.CancellationToken))
+            .Should().Be(LegacyCommandBridgeState.SharedQueueMissing);
+        (await bridge.ReconcileAsync(TestContext.Current.CancellationToken))
+            .Should().Be(LegacyCommandBridgeState.SharedQueueMissing);
+
+        bridge.ClassicProbeCount.Should().Be(0, "nothing to bind while the shared queue is missing, so no channel exception");
+    }
+
+    [Fact]
+    public async Task UserWithoutDefaultExchangeWrite_FallsBackToPassiveDeclare_AndStillStepsAside()
+    {
+        await DeclareSharedQueue();
+        // the restricted adapter user (AB#7338) may not write to amq.default
+        await using var bridge = NewFastBridge(rabbitMq.AdapterUsername, rabbitMq.AdapterPassword);
+
+        (await bridge.ReconcileAsync(TestContext.Current.CancellationToken)).Should().Be(LegacyCommandBridgeState.Bound);
+        (await bridge.ReconcileAsync(TestContext.Current.CancellationToken)).Should().Be(LegacyCommandBridgeState.Bound,
+            "a refused publish probe falls back to the passive declare in the same pass");
+        bridge.PublishProbeUnavailable.Should().BeTrue();
+        bridge.PublishProbeCount.Should().Be(1, "the publish probe is not tried again after the refusal");
+        bridge.DeclareProbeCount.Should().Be(2);
+
+        await using var classic = await StartClassicConsumer();
+        (await bridge.ReconcileAsync(TestContext.Current.CancellationToken))
+            .Should().Be(LegacyCommandBridgeState.LegacyConsumerPresent);
+        bridge.PublishProbeCount.Should().Be(1);
     }
 
     [Fact]
