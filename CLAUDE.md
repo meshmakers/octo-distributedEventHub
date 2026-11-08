@@ -164,8 +164,24 @@ replaces replicas) probes at once and restarts the back-off. Known windows: afte
 commands reach no queue until the next pass (≤ one interval; the sender's timeout/retry covers it, as for every restart of the
 former single consumer); if a classic replica (re)starts while the shared queue is bound (rollback), commands are copied to
 both until the next classic probe — ≤ 61 intervals (2 min 2 s), ≤ one interval when the shared consumer count changes too.
-Tests: `LegacyProbeScheduleTests` (unit), `BackgroundLoop_NoClassicQueue_ChannelExceptionsStayBounded` (counts RabbitMQ's
-`not_found` log lines in the testcontainer), `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_…`,
+**No RabbitMQ errors in the steady state (AB#8408).** The back-off bounded the errors per bridge, but one bridge runs per
+migrated command *and replica* (test-2 with 2 replicas: 0.233 ERROR lines/s, alarm `ApplicationErrorLogRateHigh` at 0.2/s).
+Decision: while `Bound`, the classic probe is a **mandatory publish** to the default exchange (routing key = classic queue
+name, publisher confirms, `LegacyClassicProbe`): no queue → `basic.return`, which RabbitMQ does not log; queue present → the
+probe is routed, the bridge steps aside. Every other state (first pass, `LegacyConsumerPresent`, `Faulted`) keeps the passive
+declare, so a live classic consumer during a migration rollout never receives probes; while the shared queue is missing the
+classic queue is not probed at all. A routed probe reaches a classic consumer only in the rollback case, once per detection:
+transient, `expiration: 0`, a MassTransit envelope of an unhandled type (`urn:message:…:LegacyCommandBridgeProbe`), so a
+classic MassTransit endpoint skips it instead of faulting. A broker user without write on `amq.default` (the restricted
+adapter user, AB#7338) gets 403 once; the bridge then falls back to the passive declare with the back-off for its lifetime
+(WARN log). Net effect: at most one `not_found` error pair per bridge start, none afterwards, whatever the replica count; the
+back-off, the consumer-count trigger and the reaction bound are unchanged. Rejected: the management HTTP API (extra
+endpoint, port and user tag per environment), "stop probing until restart" (a rollback would double-process until the next
+restart) and a per-service off switch (needs a config change per environment and a decision when the migration is done;
+can still be added later). Tests: `LegacyProbeScheduleTests`, `LegacyClassicProbeTests` (unit),
+`BackgroundLoop_NoClassicQueue_TwoReplicas_NoRecurringChannelExceptions` (counts RabbitMQ's `not_found` log lines in the
+testcontainer), `Bound_ClassicConsumerAppears_PublishProbeSeesIt_…`, `SharedQueueMissing_DoesNotProbeTheClassicQueue`,
+`UserWithoutDefaultExchangeWrite_FallsBackToPassiveDeclare_…`, `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_…`,
 `BackgroundLoop_SharedConsumerCountChanges_…`.
 Every migrated command has its own bridge. For DI registrations one `LegacyCommandBridgeObserver` per configuration owns
 the bridges of all migrated commands, because MassTransit's `AddBusObserver` keeps only one registration per observer type

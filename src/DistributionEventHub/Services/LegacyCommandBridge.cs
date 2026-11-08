@@ -66,6 +66,16 @@ internal enum LegacyCommandBridgeState
 ///         replicas — drops the back-off and probes at once. Every other state probes at the base interval.
 ///     </para>
 ///     <para>
+///         <b>No channel exceptions while bound (AB#8408).</b> The back-off bounded the errors per bridge, but one bridge
+///         runs per migrated command and replica, so two replicas doubled them. While the bridge is
+///         <see cref="LegacyCommandBridgeState.Bound" />, the classic probe is therefore a mandatory publish to the default
+///         exchange (see <see cref="LegacyClassicProbe" />): a missing queue returns the message, which RabbitMQ does not log.
+///         The passive declare is kept for the other states and as the fallback when the broker user may not write to
+///         <c>amq.default</c>. The bridge also checks the shared queue first and does not probe the classic queue while the
+///         shared queue is missing. The steady state then writes no RabbitMQ error at all; a bridge costs at most one error
+///         pair when it starts.
+///     </para>
+///     <para>
 ///         Known windows: after the last classic replica stopped, classic senders reach no queue until the next pass
 ///         (bounded by the interval: the bridge is not bound then, so it does not back off); if a classic replica
 ///         (re)starts while the shared queue is bound (rollback), messages are copied to both until the next classic
@@ -93,7 +103,9 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
     private IConnection? _connection;
     private IChannel? _infoChannel;
     private uint? _sharedConsumerCount;
-    private int _classicProbeCount;
+    private int _declareProbeCount;
+    private int _publishProbeCount;
+    private bool _publishProbeUnavailable;
     private Task? _loop;
     private int _disposed;
 
@@ -117,8 +129,17 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
     /// <summary>Result of the last reconcile pass.</summary>
     public LegacyCommandBridgeState State { get; private set; }
 
-    /// <summary>Number of passive declares of the classic queue so far (each 404 is one RabbitMQ channel exception).</summary>
-    internal int ClassicProbeCount => Volatile.Read(ref _classicProbeCount);
+    /// <summary>Number of classic probes so far, of both kinds.</summary>
+    internal int ClassicProbeCount => DeclareProbeCount + PublishProbeCount;
+
+    /// <summary>Number of passive declares of the classic queue so far (each 404 or 405 is one RabbitMQ channel exception).</summary>
+    internal int DeclareProbeCount => Volatile.Read(ref _declareProbeCount);
+
+    /// <summary>Number of mandatory-publish probes of the classic queue so far (none raises a channel exception).</summary>
+    internal int PublishProbeCount => Volatile.Read(ref _publishProbeCount);
+
+    /// <summary>The broker refused the publish probe; the bridge uses the passive declare for its lifetime.</summary>
+    internal bool PublishProbeUnavailable => Volatile.Read(ref _publishProbeUnavailable);
 
     /// <summary>The probe schedule of the background loop (read by tests).</summary>
     internal LegacyProbeSchedule Schedule => _schedule;
@@ -243,6 +264,13 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
     {
         var connection = await GetConnectionAsync(cancellationToken).ConfigureAwait(false);
 
+        // The shared queue is declared by its own endpoint; never create it here with guessed arguments. While it is
+        // missing there is nothing to bind or unbind, so the classic queue is not probed either (no channel exception).
+        if (await GetSharedConsumerCountAsync(connection, cancellationToken).ConfigureAwait(false) == null)
+        {
+            return LegacyCommandBridgeState.SharedQueueMissing;
+        }
+
         if (await ClassicQueueExistsAsync(connection, cancellationToken).ConfigureAwait(false))
         {
             await UnbindAsync(connection, cancellationToken).ConfigureAwait(false);
@@ -252,18 +280,69 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
         return await BindAsync(connection, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Probes the classic queue with the probe <see cref="LegacyClassicProbe.Select" /> picks for the current state.</summary>
+    private async Task<bool> ClassicQueueExistsAsync(IConnection connection, CancellationToken cancellationToken)
+    {
+        if (LegacyClassicProbe.Select(State, PublishProbeUnavailable) == LegacyClassicProbeKind.MandatoryPublish &&
+            await ClassicQueueRoutableAsync(connection, cancellationToken).ConfigureAwait(false) is { } routable)
+        {
+            return routable;
+        }
+
+        return await ClassicQueueDeclaredAsync(connection, cancellationToken).ConfigureAwait(false);
+    }
+
     /// <summary>
-    ///     405 (exclusive queue of another connection) and a successful declare both mean "a classic consumer
-    ///     exists"; 404 means it does not.
+    ///     Mandatory publish of the probe message to the default exchange: <c>true</c> = routed (the classic queue exists),
+    ///     <c>false</c> = returned (it does not), <c>null</c> = no answer (nack, or the broker refused the publish); the
+    ///     caller then falls back to the passive declare.
+    /// </summary>
+    private async Task<bool?> ClassicQueueRoutableAsync(IConnection connection, CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref _publishProbeCount);
+        await using var channel = await connection.CreateChannelAsync(
+            new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true),
+            cancellationToken).ConfigureAwait(false);
+        var messageId = Guid.NewGuid();
+        try
+        {
+            await channel.BasicPublishAsync(string.Empty, _legacyName, mandatory: true,
+                LegacyClassicProbe.CreateProperties(messageId), LegacyClassicProbe.CreateBody(messageId),
+                cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (RabbitMQ.Client.Exceptions.PublishException e) when (e.IsReturn)
+        {
+            return false;
+        }
+        catch (RabbitMQ.Client.Exceptions.PublishException)
+        {
+            return null; // nack: no answer this time
+        }
+        catch (OperationInterruptedException e) when (e.ShutdownReason?.ReplyCode == 403)
+        {
+            Volatile.Write(ref _publishProbeUnavailable, true);
+            _logger.LogWarning(
+                "Legacy command bridge '{SharedQueue}': the broker user may not publish to the default exchange " +
+                "({Reason}); the classic queue '{Legacy}' is probed with a passive declare instead, which RabbitMQ logs " +
+                "as a channel error (backed off up to every {MaxInterval})",
+                _sharedQueue, e.ShutdownReason?.ReplyText, _legacyName, _schedule.MaxInterval);
+            return null;
+        }
+    }
+
+    /// <summary>
+    ///     Passive declare: 405 (exclusive queue of another connection) and a successful declare both mean "a classic
+    ///     consumer exists"; 404 means it does not.
     /// </summary>
     /// <remarks>
     ///     A fresh channel per probe on purpose: a 404 or 405 answer closes the channel on the broker side, so it
     ///     could not be reused anyway. Channel open/close is cheap and not logged as an error; the cost of the probe
     ///     is RabbitMQ's error line for the channel exception, which <see cref="LegacyProbeSchedule" /> bounds.
     /// </remarks>
-    private async Task<bool> ClassicQueueExistsAsync(IConnection connection, CancellationToken cancellationToken)
+    private async Task<bool> ClassicQueueDeclaredAsync(IConnection connection, CancellationToken cancellationToken)
     {
-        Interlocked.Increment(ref _classicProbeCount);
+        Interlocked.Increment(ref _declareProbeCount);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         try
@@ -298,12 +377,6 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
 
     private async Task<LegacyCommandBridgeState> BindAsync(IConnection connection, CancellationToken cancellationToken)
     {
-        // The shared queue is declared by its own endpoint; never create it here with guessed arguments.
-        if (await GetSharedConsumerCountAsync(connection, cancellationToken).ConfigureAwait(false) == null)
-        {
-            return LegacyCommandBridgeState.SharedQueueMissing;
-        }
-
         await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         try
