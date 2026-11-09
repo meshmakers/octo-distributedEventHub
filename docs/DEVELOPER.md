@@ -922,10 +922,7 @@ public async Task<GetUserResponse?> GetUserSafe(string userId)
 apply it and the RabbitMQ client default stays (`ConnectionFactory.DefaultUser`/`DefaultPass`, both `guest`); user and password
 are decided independently. The connections the library opens itself next to the bus (the legacy command bridge, the Hangfire
 legacy binding cleanup) are built by `BrokerConnectionFactory` with exactly this rule, so they always connect as the same user
-as the bus. Before, they assigned the null values directly and failed with `Value cannot be null (Parameter 'userName')` while
-the bus connected: on a local stack without a broker user the bridge never bound, classic commands to migrated consumers
-(`CreateIdentityDataCommandRequest`, `RemoveRecurringJobsByScheduleGroup`) timed out and tenant creation stayed in
-`Creating/SetupStarted`. Every new direct `ConnectionFactory` in the library uses `BrokerConnectionFactory.Create`.
+as the bus. Every new direct `ConnectionFactory` in the library uses `BrokerConnectionFactory.Create`.
 
 ### Manual Bus Start/Stop
 
