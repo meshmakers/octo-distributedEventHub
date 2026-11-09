@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using MassTransit;
 using Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 using Microsoft.Extensions.Logging;
@@ -84,6 +83,12 @@ internal enum LegacyCommandBridgeState
 ///         the next tick when the number of shared consumers changes at the same time. Roll back by stopping the
 ///         shared replicas first.
 ///     </para>
+///     <para>
+///         <b>Clock (AB#8624).</b> The loop timer and the monotonic clock of the probe schedule come from one
+///         <see cref="TimeProvider" /> (<see cref="TimeProvider.System" /> in production). Tests pass a fake provider and
+///         advance it tick by tick, so the reaction bound is checked on the bridge's own clock and not on the wall clock
+///         of a loaded test host. Broker calls and the connect timeout always run in real time.
+///     </para>
 /// </remarks>
 internal sealed class LegacyCommandBridge : IAsyncDisposable
 {
@@ -100,11 +105,13 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _stopping = new();
     private readonly LegacyProbeSchedule _schedule;
-    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly TimeProvider _timeProvider;
+    private readonly long _startTimestamp;
     private IConnection? _connection;
     private IChannel? _infoChannel;
     private uint? _sharedConsumerCount;
     private int _declareProbeCount;
+    private int _completedPasses;
     private int _publishProbeCount;
     private bool _publishProbeUnavailable;
     private Task? _loop;
@@ -115,9 +122,12 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
     /// <param name="sharedQueue">Prefixed name of the shared queue</param>
     /// <param name="interval">Time between two reconcile passes</param>
     /// <param name="logger">Logger</param>
+    /// <param name="timeProvider">Clock and timer of the background loop; <see cref="TimeProvider.System" /> when null</param>
     public LegacyCommandBridge(RabbitMqTransportOptions transportOptions, string legacyName, string sharedQueue,
-        TimeSpan? interval, ILogger logger)
+        TimeSpan? interval, ILogger logger, TimeProvider? timeProvider = null)
     {
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _startTimestamp = _timeProvider.GetTimestamp();
         _transportOptions = transportOptions;
         _legacyName = legacyName;
         _sharedQueue = sharedQueue;
@@ -145,6 +155,12 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
     /// <summary>The probe schedule of the background loop (read by tests).</summary>
     internal LegacyProbeSchedule Schedule => _schedule;
 
+    /// <summary>Time since the bridge was created, on the clock of its <see cref="TimeProvider" /> (the schedule's clock).</summary>
+    internal TimeSpan Elapsed => _timeProvider.GetElapsedTime(_startTimestamp);
+
+    /// <summary>Number of finished passes of the background loop, one per timer tick (sync point for tests with a fake clock).</summary>
+    internal int CompletedPasses => Volatile.Read(ref _completedPasses);
+
     /// <summary>Starts the background reconcile loop (idempotent).</summary>
     public void Start()
     {
@@ -158,26 +174,33 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
 
     private async Task RunAsync(CancellationToken cancellationToken)
     {
-        using var timer = new PeriodicTimer(_interval);
+        using var timer = new PeriodicTimer(_interval, _timeProvider);
         do
         {
-            var now = _clock.Elapsed;
-            if (!_schedule.IsDue(now))
-            {
-                if (!await SharedConsumerCountChangedAsync(cancellationToken).ConfigureAwait(false))
-                {
-                    continue;
-                }
+            await RunPassAsync(cancellationToken).ConfigureAwait(false);
+            Interlocked.Increment(ref _completedPasses);
+        } while (await WaitForNextTickAsync(timer, cancellationToken).ConfigureAwait(false));
+    }
 
-                _logger.LogDebug(
-                    "Legacy command bridge '{SharedQueue}': the consumer count of the shared queue changed; " +
-                    "probing the classic queue now instead of in {Gap}", _sharedQueue, _schedule.CurrentGap);
-                _schedule.ProbeNow();
+    /// <summary>One tick of the loop: the classic probe when it is due, otherwise the cheap consumer-count check.</summary>
+    private async Task RunPassAsync(CancellationToken cancellationToken)
+    {
+        var now = Elapsed;
+        if (!_schedule.IsDue(now))
+        {
+            if (!await SharedConsumerCountChangedAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
             }
 
-            var state = await ReconcileAsync(cancellationToken).ConfigureAwait(false);
-            _schedule.Record(state, now);
-        } while (await WaitForNextTickAsync(timer, cancellationToken).ConfigureAwait(false));
+            _logger.LogDebug(
+                "Legacy command bridge '{SharedQueue}': the consumer count of the shared queue changed; " +
+                "probing the classic queue now instead of in {Gap}", _sharedQueue, _schedule.CurrentGap);
+            _schedule.ProbeNow();
+        }
+
+        var state = await ReconcileAsync(cancellationToken).ConfigureAwait(false);
+        _schedule.Record(state, now);
     }
 
     /// <summary>
