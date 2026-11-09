@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MassTransit;
+using Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Exceptions;
@@ -482,19 +483,7 @@ internal sealed class LegacyCommandBridge : IAsyncDisposable
 
         await ResetConnectionAsync().ConfigureAwait(false);
 
-        var factory = new ConnectionFactory
-        {
-            HostName = _transportOptions.Host,
-            Port = _transportOptions.Port,
-            VirtualHost = string.IsNullOrEmpty(_transportOptions.VHost) ? "/" : _transportOptions.VHost,
-            UserName = _transportOptions.User,
-            Password = _transportOptions.Pass,
-            ClientProvidedName = _clientName
-        };
-        if (_transportOptions.UseSsl)
-        {
-            factory.Ssl = new SslOption { Enabled = true, ServerName = _transportOptions.Host };
-        }
+        var factory = BrokerConnectionFactory.Create(_transportOptions, _clientName);
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(ConnectTimeout);

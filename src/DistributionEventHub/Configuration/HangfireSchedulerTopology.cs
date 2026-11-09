@@ -116,19 +116,7 @@ internal sealed class LegacyHangfireSchedulerBindingRemover(
         using var cts = new CancellationTokenSource(Timeout);
         try
         {
-            var factory = new ConnectionFactory
-            {
-                HostName = options.Host,
-                Port = options.Port,
-                VirtualHost = string.IsNullOrEmpty(options.VHost) ? "/" : options.VHost,
-                UserName = options.User,
-                Password = options.Pass,
-                ClientProvidedName = $"{prefix}-hangfire-legacy-binding-cleanup"
-            };
-            if (options.UseSsl)
-            {
-                factory.Ssl = new SslOption { Enabled = true, ServerName = options.Host };
-            }
+            var factory = BrokerConnectionFactory.Create(options, $"{prefix}-hangfire-legacy-binding-cleanup");
 
             await using var connection = await factory.CreateConnectionAsync(cts.Token).ConfigureAwait(false);
             foreach (var source in sourceExchanges)

@@ -902,8 +902,8 @@ public async Task<GetUserResponse?> GetUserSafe(string userId)
 | `InstancePrefix` | `string?` | - | Instance prefix (overridable in code) |
 | `BrokerHost` | `string` | `localhost` | RabbitMQ host |
 | `BrokerPort` | `ushort` | `5672` | RabbitMQ port |
-| `BrokerUser` | `string?` | - | RabbitMQ username |
-| `BrokerPassword` | `string?` | - | RabbitMQ password |
+| `BrokerUser` | `string?` | - (RabbitMQ client default `guest`) | RabbitMQ username |
+| `BrokerPassword` | `string?` | - (RabbitMQ client default `guest`) | RabbitMQ password |
 | `RepositoryHost` | `string` | `localhost` | MongoDB host |
 | `SystemDatabaseName` | `string` | `OctoSystem` | MongoDB database name |
 | `RepositoryUser` | `string` | `octo-system-admin` | MongoDB username |
@@ -911,6 +911,15 @@ public async Task<GetUserResponse?> GetUserSafe(string userId)
 | `RepositoryUseTls` | `bool` | `true` | TLS for MongoDB |
 | `RepositoryAllowInsecureTls` | `bool` | `false` | Allow insecure TLS |
 | `DatabaseAuthenticationSource` | `string` | `admin` | MongoDB auth database |
+
+**Broker credentials (AB#8623).** When `BrokerUser` or `BrokerPassword` is null or whitespace, MassTransit 8.5.10 does not
+apply it and the RabbitMQ client default stays (`ConnectionFactory.DefaultUser`/`DefaultPass`, both `guest`); user and password
+are decided independently. The connections the library opens itself next to the bus (the legacy command bridge, the Hangfire
+legacy binding cleanup) are built by `BrokerConnectionFactory` with exactly this rule, so they always connect as the same user
+as the bus. Before, they assigned the null values directly and failed with `Value cannot be null (Parameter 'userName')` while
+the bus connected: on a local stack without a broker user the bridge never bound, classic commands to migrated consumers
+(`CreateIdentityDataCommandRequest`, `RemoveRecurringJobsByScheduleGroup`) timed out and tenant creation stayed in
+`Creating/SetupStarted`. Every new direct `ConnectionFactory` in the library uses `BrokerConnectionFactory.Create`.
 
 ### Manual Bus Start/Stop
 

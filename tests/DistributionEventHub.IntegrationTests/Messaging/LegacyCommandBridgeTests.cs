@@ -96,6 +96,25 @@ public class LegacyCommandBridgeTests(RabbitMqFixture rabbitMq) : IAsyncLifetime
         (await PublishToClassicExchange()).Should().Be(1u);
     }
 
+    /// <summary>
+    ///     AB#8623: without a configured broker user (the local default) the bridge connects with the same defaults as
+    ///     MassTransit (<c>guest</c>, the user of the test broker) instead of failing with
+    ///     <c>Value cannot be null (Parameter 'userName')</c> on every reconcile.
+    /// </summary>
+    [Fact]
+    public async Task NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds()
+    {
+        await DeclareSharedQueue();
+        await using var bridge = new LegacyCommandBridge(new RabbitMqTransportOptions
+        {
+            Host = rabbitMq.Host, Port = (ushort)rabbitMq.Port, User = null, Pass = null
+        }, _legacy, Shared, TimeSpan.FromMilliseconds(200), NullLogger.Instance);
+
+        (await bridge.ReconcileAsync(TestContext.Current.CancellationToken)).Should().Be(LegacyCommandBridgeState.Bound);
+
+        (await PublishToClassicExchange()).Should().Be(1u);
+    }
+
     [Fact]
     public async Task ClassicConsumerAlive_DoesNotBind_SoNothingIsDuplicated_AndBindsAfterItIsGone()
     {
