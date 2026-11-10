@@ -183,6 +183,15 @@ can still be added later). Tests: `LegacyProbeScheduleTests`, `LegacyClassicProb
 testcontainer), `Bound_ClassicConsumerAppears_PublishProbeSeesIt_…`, `SharedQueueMissing_DoesNotProbeTheClassicQueue`,
 `UserWithoutDefaultExchangeWrite_FallsBackToPassiveDeclare_…`, `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_…`,
 `BackgroundLoop_SharedConsumerCountChanges_…`.
+**Clock (AB#8624):** the loop timer and the schedule's clock come from an optional `TimeProvider` constructor argument of
+`LegacyCommandBridge` (`TimeProvider.System` by default, production timing unchanged). The reaction-bound test drives a
+`FakeTimeProvider` tick by tick (`CompletedPasses` is the sync point), because the wall-clock version failed under the full
+parallel suite from host scheduling delays, not from the bridge (`docs/TEST-CONCEPT.md`, "Timing assertions under parallel load").
+**Broker credentials (AB#8623):** the bridge and the Hangfire legacy binding cleanup build their RabbitMQ connection with
+`Configuration/BrokerConnectionFactory`, which applies `BrokerUser`/`BrokerPassword` exactly like MassTransit 8.5.10 (null or
+whitespace → not applied, RabbitMQ client default `guest`). Never assign `RabbitMqTransportOptions.User`/`Pass` to a
+`ConnectionFactory` directly: with no broker user configured that throws `Value cannot be null (Parameter 'userName')` while
+the bus connects. Tests: `BrokerConnectionFactoryTests`, `NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds`.
 Every migrated command has its own bridge. For DI registrations one `LegacyCommandBridgeObserver` per configuration owns
 the bridges of all migrated commands, because MassTransit's `AddBusObserver` keeps only one registration per observer type
 (`TryAddEnumerable`); one observer per command served only the first migrated command of a process (AB#8368, fixed in

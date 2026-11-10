@@ -3,6 +3,7 @@ using MassTransit;
 using Meshmakers.Octo.Common.DistributionEventHub.IntegrationTests.Fixtures;
 using Meshmakers.Octo.Common.DistributionEventHub.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using RabbitMQ.Client;
 using Xunit;
 
@@ -96,6 +97,25 @@ public class LegacyCommandBridgeTests(RabbitMqFixture rabbitMq) : IAsyncLifetime
         (await PublishToClassicExchange()).Should().Be(1u);
     }
 
+    /// <summary>
+    ///     AB#8623: without a configured broker user (the local default) the bridge connects with the same defaults as
+    ///     MassTransit (<c>guest</c>, the user of the test broker) instead of failing with
+    ///     <c>Value cannot be null (Parameter 'userName')</c> on every reconcile.
+    /// </summary>
+    [Fact]
+    public async Task NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds()
+    {
+        await DeclareSharedQueue();
+        await using var bridge = new LegacyCommandBridge(new RabbitMqTransportOptions
+        {
+            Host = rabbitMq.Host, Port = (ushort)rabbitMq.Port, User = null, Pass = null
+        }, _legacy, Shared, TimeSpan.FromMilliseconds(200), NullLogger.Instance);
+
+        (await bridge.ReconcileAsync(TestContext.Current.CancellationToken)).Should().Be(LegacyCommandBridgeState.Bound);
+
+        (await PublishToClassicExchange()).Should().Be(1u);
+    }
+
     [Fact]
     public async Task ClassicConsumerAlive_DoesNotBind_SoNothingIsDuplicated_AndBindsAfterItIsGone()
     {
@@ -177,10 +197,11 @@ public class LegacyCommandBridgeTests(RabbitMqFixture rabbitMq) : IAsyncLifetime
 
     private LegacyCommandBridge NewFastBridge() => NewFastBridge(rabbitMq.Username, rabbitMq.Password);
 
-    private LegacyCommandBridge NewFastBridge(string user, string password) => new(new RabbitMqTransportOptions
-    {
-        Host = rabbitMq.Host, Port = (ushort)rabbitMq.Port, User = user, Pass = password
-    }, _legacy, Shared, TimeSpan.FromMilliseconds(FastIntervalMs), NullLogger.Instance);
+    private LegacyCommandBridge NewFastBridge(string user, string password, TimeProvider? clock = null) =>
+        new(new RabbitMqTransportOptions
+        {
+            Host = rabbitMq.Host, Port = (ushort)rabbitMq.Port, User = user, Pass = password
+        }, _legacy, Shared, TimeSpan.FromMilliseconds(FastIntervalMs), NullLogger.Instance, clock);
 
     /// <summary>A bridge whose broker user may publish to the default exchange (the core services' user).</summary>
     private LegacyCommandBridge NewCoreBridge() => NewFastBridge(rabbitMq.CoreUsername, rabbitMq.CorePassword);
@@ -324,23 +345,47 @@ public class LegacyCommandBridgeTests(RabbitMqFixture rabbitMq) : IAsyncLifetime
         bridge.PublishProbeCount.Should().Be(1);
     }
 
+    /// <remarks>
+    ///     AB#8624: the reaction is measured on the bridge's own clock, a <see cref="FakeTimeProvider" /> that the test
+    ///     advances one interval per tick. The wall-clock version (bound + 1 s slack) failed under the full parallel suite
+    ///     (7.76 s against 7.1 s): the bridge probed on schedule, but the loaded test host delivered timer ticks 200-440 ms
+    ///     late and broker round trips took up to 2.2 s, and every such delay counted as reaction time. With the fake clock
+    ///     the test proves the bridge's decision exactly; host load only makes the test slower, never red.
+    /// </remarks>
     [Fact]
     public async Task BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_StepsAsideWithinCapPlusOneInterval()
     {
         await DeclareSharedQueue();
-        await using var bridge = NewFastBridge();
+        var clock = new FakeTimeProvider();
+        await using var bridge = NewFastBridge(rabbitMq.Username, rabbitMq.Password, clock);
         bridge.Start();
-        await WaitForAsync(bridge, LegacyCommandBridgeState.Bound);
-        await WaitForCapAsync(bridge);
+        await WaitForPassesAsync(bridge, 1);
+        bridge.State.Should().Be(LegacyCommandBridgeState.Bound);
 
-        // a classic consumer appears, the number of shared consumers does not change: only the backed-off probe sees it
-        var appeared = DateTime.UtcNow;
+        // back off to the cap: gaps of 1, 2, 4, ... intervals up to 60 intervals
+        for (var tick = 0; bridge.Schedule.CurrentGap < bridge.Schedule.MaxInterval; tick++)
+        {
+            tick.Should().BeLessThan(LegacyProbeSchedule.MaxIntervalFactor * 3, "the bridge should have backed off fully");
+            await AdvanceOneTickAsync(bridge, clock);
+        }
+
+        // Worst case: a classic consumer appears right after the probe that set the cap, and the number of shared
+        // consumers does not change, so only the backed-off probe can see it.
+        var appearedAt = bridge.Elapsed;
+        var probesBefore = bridge.ClassicProbeCount;
         await using var classic = await StartClassicConsumer();
-        await WaitForAsync(bridge, LegacyCommandBridgeState.LegacyConsumerPresent);
-        var reaction = DateTime.UtcNow - appeared;
 
         var bound = bridge.Schedule.MaxInterval + bridge.Schedule.Interval;
-        reaction.Should().BeLessThanOrEqualTo(bound + TimeSpan.FromSeconds(1), "documented reaction bound (+1 s slack)");
+        while (bridge.State != LegacyCommandBridgeState.LegacyConsumerPresent && bridge.Elapsed - appearedAt <= bound)
+        {
+            bridge.ClassicProbeCount.Should().Be(probesBefore, "no classic probe runs before the backed-off one is due");
+            await AdvanceOneTickAsync(bridge, clock);
+        }
+
+        bridge.State.Should().Be(LegacyCommandBridgeState.LegacyConsumerPresent,
+            "the bridge steps aside within the documented bound of the cap plus one interval");
+        (bridge.Elapsed - appearedAt).Should().BeLessThanOrEqualTo(bound);
+        bridge.ClassicProbeCount.Should().Be(probesBefore + 1, "the first backed-off probe sees the classic consumer");
         (await PublishToClassicExchange()).Should().Be(0u, "after stepping aside nothing is copied to the shared queue");
 
         // while the classic consumer is alive the bridge probes at the base interval again
@@ -370,6 +415,26 @@ public class LegacyCommandBridgeTests(RabbitMqFixture rabbitMq) : IAsyncLifetime
         (DateTime.UtcNow - appeared).Should().BeLessThan(bridge.Schedule.MaxInterval / 2,
             "a changed consumer count drops the back-off on the next tick");
         bridge.ClassicProbeCount.Should().BeGreaterThan(probesBefore);
+    }
+
+    /// <summary>Waits in real time (generous deadline) until the loop finished at least <paramref name="passes" /> passes.</summary>
+    private static async Task WaitForPassesAsync(LegacyCommandBridge bridge, int passes)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (bridge.CompletedPasses < passes && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(5, TestContext.Current.CancellationToken);
+        }
+
+        bridge.CompletedPasses.Should().BeGreaterThanOrEqualTo(passes, "the bridge loop should finish its pass");
+    }
+
+    /// <summary>Moves the fake clock by one interval (one timer tick) and waits until the loop processed that tick.</summary>
+    private static async Task AdvanceOneTickAsync(LegacyCommandBridge bridge, FakeTimeProvider clock)
+    {
+        var passes = bridge.CompletedPasses;
+        clock.Advance(bridge.Schedule.Interval);
+        await WaitForPassesAsync(bridge, passes + 1);
     }
 
     private static async Task WaitForAsync(LegacyCommandBridge bridge, LegacyCommandBridgeState expected)

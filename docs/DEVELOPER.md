@@ -506,6 +506,12 @@ on one reused channel. The shared queue exists, so this raises no channel except
 The classic probe keeps a fresh channel per probe on purpose: a 404/405 answer closes the channel on the broker side, so
 it cannot be reused; channel open/close is cheap and not logged as an error.
 
+**Clock of the loop (AB#8624).** The loop timer (`PeriodicTimer`) and the monotonic clock the schedule runs on come from one
+`TimeProvider`, an optional constructor argument of the internal `LegacyCommandBridge` (`TimeProvider.System` when omitted,
+which is what every registration uses; same timing as before). Broker calls and the 15 s connect timeout always run in real
+time. Tests that check the reaction bound pass a `FakeTimeProvider` and advance it one interval per tick, waiting on
+`CompletedPasses` after each advance, so the bound is proven on the bridge's own clock instead of the wall clock of the test host.
+
 **No RabbitMQ errors in the steady state (AB#8408).** The back-off bounds the errors *per bridge*, but one bridge runs per
 migrated command and per replica, so the rate still grew with the replica count (test-2 with two identity and two bot
 replicas: 0.233 ERROR lines/s, above the 0.2/s threshold of `ApplicationErrorLogRateHigh`). The bridge therefore picks the
@@ -902,8 +908,8 @@ public async Task<GetUserResponse?> GetUserSafe(string userId)
 | `InstancePrefix` | `string?` | - | Instance prefix (overridable in code) |
 | `BrokerHost` | `string` | `localhost` | RabbitMQ host |
 | `BrokerPort` | `ushort` | `5672` | RabbitMQ port |
-| `BrokerUser` | `string?` | - | RabbitMQ username |
-| `BrokerPassword` | `string?` | - | RabbitMQ password |
+| `BrokerUser` | `string?` | - (RabbitMQ client default `guest`) | RabbitMQ username |
+| `BrokerPassword` | `string?` | - (RabbitMQ client default `guest`) | RabbitMQ password |
 | `RepositoryHost` | `string` | `localhost` | MongoDB host |
 | `SystemDatabaseName` | `string` | `OctoSystem` | MongoDB database name |
 | `RepositoryUser` | `string` | `octo-system-admin` | MongoDB username |
@@ -911,6 +917,12 @@ public async Task<GetUserResponse?> GetUserSafe(string userId)
 | `RepositoryUseTls` | `bool` | `true` | TLS for MongoDB |
 | `RepositoryAllowInsecureTls` | `bool` | `false` | Allow insecure TLS |
 | `DatabaseAuthenticationSource` | `string` | `admin` | MongoDB auth database |
+
+**Broker credentials (AB#8623).** When `BrokerUser` or `BrokerPassword` is null or whitespace, MassTransit 8.5.10 does not
+apply it and the RabbitMQ client default stays (`ConnectionFactory.DefaultUser`/`DefaultPass`, both `guest`); user and password
+are decided independently. The connections the library opens itself next to the bus (the legacy command bridge, the Hangfire
+legacy binding cleanup) are built by `BrokerConnectionFactory` with exactly this rule, so they always connect as the same user
+as the bus. Every new direct `ConnectionFactory` in the library uses `BrokerConnectionFactory.Create`.
 
 ### Manual Bus Start/Stop
 

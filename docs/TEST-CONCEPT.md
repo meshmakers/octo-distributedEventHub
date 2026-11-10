@@ -1330,11 +1330,28 @@ public class IsolationTestConsumer : IDistributedConsumer<IsolationTestMessage>
 | `Premise_SameNameSharedTopology_ConflictsWithTheClassicQueueAndExchange` | documents why the shared queue needs its own name (405 on the queue, 406 on the exchange) |
 | `DynamicRegistration_WithMigrationSwitch_SharesTheQueue_AndServesClassicSenders` | `RegisterCommandConsumer(..., options)` with the switch; disposing a handle leaves the other serving |
 | bridge: `NoClassicConsumer_BindsSharedQueueToClassicExchange_AndClassicTrafficArrives`, `ClassicConsumerAlive_DoesNotBind_...`, `ClassicConsumerStartsWhileBound_BridgeUnbinds`, `ClassicExchangeWithOtherArguments_...`, `BrokerUnreachable_...`, `BackgroundLoop_FollowsTheClassicConsumer_AndDisposeIsIdempotent` | the reconcile state machine and its failure cases |
-| bridge back-off (AB#8404): `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_StepsAsideWithinCapPlusOneInterval`, `BackgroundLoop_SharedConsumerCountChanges_ProbesAtOnceDespiteTheBackOff` | a classic consumer is still seen within 61 intervals, at once when the shared consumer count changes |
+| bridge back-off (AB#8404): `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_StepsAsideWithinCapPlusOneInterval`, `BackgroundLoop_SharedConsumerCountChanges_ProbesAtOnceDespiteTheBackOff` | a classic consumer is still seen within 61 intervals, at once when the shared consumer count changes. The first test runs the bridge on a `FakeTimeProvider` (AB#8624): it advances one interval per tick to the cap, starts the classic consumer right after the probe that set the cap (worst case), and proves on the bridge's clock that no classic probe runs before the backed-off one and that this first probe sees the consumer within cap + one interval |
 | bridge without steady-state errors (AB#8408): `BackgroundLoop_NoClassicQueue_TwoReplicas_NoRecurringChannelExceptions`, `Bound_ClassicConsumerAppears_PublishProbeSeesIt_WithoutChannelException_AndLeavesNoMessage`, `SharedQueueMissing_DoesNotProbeTheClassicQueue`, `UserWithoutDefaultExchangeWrite_FallsBackToPassiveDeclare_AndStillStepsAside` | two bridges with no classic queue: exactly one RabbitMQ `not_found` log line per bridge start, none over the following 12 s; the error-free publish probe still detects a classic queue and leaves no message in it; no classic probe while the shared queue is missing; a user without write on `amq.default` falls back to the passive declare once and still steps aside |
+| bridge without a configured broker user (AB#8623): `NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds` | with `User`/`Pass` null the bridge connects with the RabbitMQ client defaults (`guest`, like MassTransit) and binds |
+| unit `BrokerConnectionFactoryTests` (AB#8623) | null or blank user/password keep the RabbitMQ client defaults, a configured user is used, user and password are decided independently (MassTransit 8.5.10 rule); host, port, virtual host, TLS and client name |
 | unit `LegacyClassicProbeTests` (AB#8408) | mandatory publish only while `Bound` and not refused before; passive declare in every other state; probe message transient, `expiration: 0`, MassTransit envelope of the unhandled probe type |
 | unit `LegacyProbeScheduleTests` (AB#8404) | gaps 1, 2, 4, … up to 60 intervals while bound; full speed in every other state; reaction bound; < 5 % of the former probes per day |
 | unit | switch is off by default; queue naming; interface default implementation; `SuppressFaults` rejected; endpoint definition only with options; deprecation logged once per name |
+
+### Timing assertions under parallel load (AB#8624)
+
+A wall-clock bound measures the bridge **and** the test host. Under the full parallel suite the host delivers timer ticks
+and `Task.Delay` continuations late (measured 2026-11-09 in 6 traced full runs: ticks of a 100 ms timer up to 440 ms apart,
+a 50 ms poll that resumed after 212 ms, one broker round trip of 2.2 s right after it; 1-10 ms otherwise), so
+`BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_…` once took 7.76 s against its 7.1 s limit (bound + 1 s slack) while
+the bridge probed exactly on schedule (reaction 5981-6288 ms in the traced runs). Rules:
+
+- Prove a time bound of a component on the component's own clock: inject a `TimeProvider` and drive it with
+  `FakeTimeProvider` (`Microsoft.Extensions.TimeProvider.Testing`) one tick at a time, with a real-time deadline only as a
+  hang guard. Do not widen the slack of a wall-clock bound to make it pass.
+- Keep wall-clock bounds only where the slack is a large multiple of the expected time (for example
+  `BackgroundLoop_SharedConsumerCountChanges_…`: < 3 s for a reaction of about one 100 ms tick).
+- A flaky timing test is a bug with a root cause (trace the loop, measure, then fix); never "pre-existing".
 
 ## Test Infrastructure
 
