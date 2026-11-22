@@ -242,7 +242,7 @@ octo-mesh-adapter row was declared with AB#8405.
 
 ### Dependencies
 
-- MassTransit.RabbitMQ 8.5.10
-- MassTransit.Hangfire 8.5.10 (optional scheduling)
-- MongoDB.Driver 3.5.2 (for MongoDB project)
+- MassTransit.RabbitMQ 8.5.12 (stays on 8.x: MassTransit 9 is commercially licensed)
+- MassTransit.Hangfire 8.5.12 (optional scheduling)
+- MongoDB.Driver 3.14.1 (for MongoDB project)
 - Meshmakers.Common.Shared (internal dependency)

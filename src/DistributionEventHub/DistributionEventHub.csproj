@@ -19,10 +19,10 @@
 
     <ItemGroup>
         <PackageReference Include="Meshmakers.Common.Shared" Version="$(MeshmakerVersion)" />
-        <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.10" />
-        <PackageReference Include="MassTransit.Hangfire" Version="8.5.10" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
-        <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.11" />
+        <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.12" />
+        <PackageReference Include="MassTransit.Hangfire" Version="8.5.12" />
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.15" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     </ItemGroup>
 
