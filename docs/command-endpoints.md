@@ -3,7 +3,7 @@ description: Shared command endpoints (CK methods), their opt-in overloads, and 
 applies_to: src/DistributionEventHub/Services/*Command*.cs, src/DistributionEventHub/Consumers/SharedCommandConsumerDefinition.cs, tests/DistributionEventHub.IntegrationTests/Messaging/Command*Tests.cs, tests/DistributionEventHub.IntegrationTests/Messaging/RestrictedAdapterUserTests.cs
 ---
 
-### Shared Command Endpoints (CK methods, AB#5671)
+### Shared Command Endpoints (CK methods)
 
 `IEventHubControl.RegisterCommandConsumer(name, handler, CommandConsumerOptions)` and
 `IDistributionEventHubService.GetCommandResponseAsync(name, request, CommandSendOptions, ct)` are a **pair**:
@@ -19,7 +19,7 @@ Review fixes (H5/M5/L7): `ExecuteDeliveredCommandHandler` overload with `Command
 `Fault<T>`, no `_error`/`_skipped` copies) for sensitive payloads; a non-caller `OperationCanceledException` maps to
 `DistributedOperationFailedException`.
 
-Opt-in (AB#6891): the shared-endpoint overloads are additive. `AddCommandConsumer`, the plain
+Opt-in: the shared-endpoint overloads are additive. `AddCommandConsumer`, the plain
 `RegisterCommandConsumer(name, handler)` and the plain `GetCommandResponseAsync` keep the exclusive, non-durable
 auto-delete queue and the `?temporary=true` request exchange (pinned by
 `IntegrationTests/Messaging/LegacyCommandEndpointUnchangedTests`). The new interface members have default
@@ -28,7 +28,7 @@ implementations that throw `NotSupportedException`, so existing test doubles of 
 is a separate story. A send right after `RegisterCommandConsumer` without `WaitUntilReadyAsync` is either delivered
 or fails with `CommandNotRoutableException` (never a silent timeout; `SendRightAfterRegistration_*` test).
 
-### Restricted adapter broker user (AB#7338)
+### Restricted adapter broker user
 
 Adapters and edge sites connect with a broker user that is refused on every resource whose name contains `octo::method::` and on the
 default exchange (details and the three patterns: `docs/DEVELOPER.md`, "Broker permissions"). `RestrictedAdapterUserTests` proves it

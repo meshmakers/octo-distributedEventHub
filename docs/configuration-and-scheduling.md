@@ -31,9 +31,9 @@ All queue/exchange names are prefixed with `InstancePrefix` (default: "default")
 - `DistributionEventHubOptions.InstancePrefix` in appsettings.json
 - `config.InstancePrefix` in code (takes precedence)
 
-**Hangfire scheduler queue (AB#5867).** MassTransit's `HangfireEndpointDefinition` ignores the endpoint
+**Hangfire scheduler queue.** MassTransit's `HangfireEndpointDefinition` ignores the endpoint
 name formatter, so the scheduler queue was the un-prefixed `hangfire` in every instance while the
-scheduling exchanges bound into it are prefixed. Two instances on one broker (test-2 `main` + `dev`)
+scheduling exchanges bound into it are prefixed. Two instances on one broker (for example a `main` and a `dev` instance)
 consumed it as competing consumers and stored each other's recurring jobs in the wrong Hangfire database,
 where `RemoveRecurringJobsByScheduleGroup` never reaches them (doubled cron ticks, jobs surviving
 `UndeployTriggers`). `AddHangfireMessageScheduler` now sets the queue to `{prefix}-hangfire`, and

@@ -369,7 +369,7 @@ public class DynamicServiceCaller
 
 #### Shared Command Endpoints (Competing Consumers, `mandatory` Send)
 
-Used by CK v2 methods (`Meshmakers.Octo.Services.Methods`, AB#5671). A dynamic command endpoint registered with
+Used by CK v2 methods (`Meshmakers.Octo.Services.Methods`). A dynamic command endpoint registered with
 `CommandConsumerOptions` is a **shared** endpoint: any number of processes can register the same command name and
 become competing consumers on one queue. It is called with the `CommandSendOptions` overload of
 `GetCommandResponseAsync`. **The two options overloads form a pair** — do not mix them with the legacy
@@ -451,10 +451,10 @@ host's logging configuration if the noise matters. Callers get `CommandNotRoutab
 **Legacy endpoints are exclusive.** The same MassTransit rule makes the classic `AddCommandConsumer(name)` endpoints
 (`Temporary = true`) and the legacy dynamic `RegisterCommandConsumer(name, handler)` queues **exclusive** at the broker:
 only one process consumes a given command name at a time; other replicas retry the declaration until the owner's
-connection is gone. This is deprecated since AB#6909 (one warning per command name and process); see the next section
+connection is gone. This is deprecated (one warning per command name and process); see the next section
 for the migration to a shared queue.
 
-#### Migrating exclusive command queues (AB#6909)
+#### Migrating exclusive command queues
 
 **Opt-in per consumer.** Nothing changes for a registration without the switch: queue name, arguments and behaviour are
 byte-identical to before (pinned by `LegacyCommandEndpointUnchangedTests` and
@@ -493,7 +493,7 @@ replica exists it receives all classic commands (as before); as soon as the last
 All replicas run the same idempotent check, so they converge. The bridge never creates the shared queue and does not remove its
 binding on shutdown (the queue is shared and disappears with its last consumer).
 
-**Probe interval and back-off (AB#8404).** A passive declare of a queue that does not exist makes RabbitMQ close the channel
+**Probe interval and back-off.** A passive declare of a queue that does not exist makes RabbitMQ close the channel
 and log an error (`operation queue.declare caused a channel exception not_found: no queue '…'`). After the migration "no
 classic queue" is the steady state, so a fixed 2 s probe wrote one error line per migrated command, replica and 2 s
 (about 600,000 lines per cluster and day with 7 migrated commands, seen with 3.5.65). The bridge therefore probes the
@@ -510,14 +510,14 @@ on one reused channel. The shared queue exists, so this raises no channel except
 The classic probe keeps a fresh channel per probe on purpose: a 404/405 answer closes the channel on the broker side, so
 it cannot be reused; channel open/close is cheap and not logged as an error.
 
-**Clock of the loop (AB#8624).** The loop timer (`PeriodicTimer`) and the monotonic clock the schedule runs on come from one
+**Clock of the loop.** The loop timer (`PeriodicTimer`) and the monotonic clock the schedule runs on come from one
 `TimeProvider`, an optional constructor argument of the internal `LegacyCommandBridge` (`TimeProvider.System` when omitted,
 which is what every registration uses; same timing as before). Broker calls and the 15 s connect timeout always run in real
 time. Tests that check the reaction bound pass a `FakeTimeProvider` and advance it one interval per tick, waiting on
 `CompletedPasses` after each advance, so the bound is proven on the bridge's own clock instead of the wall clock of the test host.
 
-**No RabbitMQ errors in the steady state (AB#8408).** The back-off bounds the errors *per bridge*, but one bridge runs per
-migrated command and per replica, so the rate still grew with the replica count (test-2 with two identity and two bot
+**No RabbitMQ errors in the steady state.** The back-off bounds the errors *per bridge*, but one bridge runs per
+migrated command and per replica, so the rate still grew with the replica count (a test environment with two identity and two bot
 replicas: 0.233 ERROR lines/s, above the 0.2/s threshold of `ApplicationErrorLogRateHigh`). The bridge therefore picks the
 kind of classic probe by state (`LegacyClassicProbe`):
 
@@ -535,7 +535,7 @@ consumer handles (`urn:message:Meshmakers.Octo.Common.DistributionEventHub:Legac
 MassTransit endpoint skips it rather than faulting, and it does not stay in a queue without a consumer.
 
 Publishing to the default exchange needs write permission on `amq.default`. The core services' broker user has it; the
-restricted adapter user (AB#7338) does not. When the broker refuses the publish (403 ACCESS_REFUSED, one error line) the
+restricted adapter user does not. When the broker refuses the publish (403 ACCESS_REFUSED, one error line) the
 bridge logs a WARN and uses the passive declare with the back-off above for the rest of its lifetime.
 
 Alternatives considered: the management HTTP API (`GET /api/queues/{vhost}/{name}` answers 404 without a channel error, but
@@ -553,14 +553,14 @@ pod becomes ready, then a migrated pod is terminated). `LegacyProbeInterval` sca
 command gets its own bridge; for the DI registrations they are all started and stopped by one bus observer
 (`LegacyCommandBridgeObserver`), because MassTransit's `AddBusObserver` keeps only one registration per observer type. Up to
 event hub 3.5.64 each migrated command registered its own observer of the same type, so only the **first** migrated command
-of a process served classic senders and the others timed out (AB#8368). Use a release with the fix before migrating more
+of a process served classic senders and the others timed out. Use a release with the fix before migrating more
 than one command per service; `LegacyCommandMigrationTests.SeveralMigratedCommandsInOneProcess_EachServesClassicSenders_EachProcessedOnce_ExclusiveByDesignUnaffected`
 covers two migrated commands and one exclusive-by-design command in the same process.
 
 **Rollout order** (per service, no order between services, senders untouched):
 
 1. Release the library containing this change; no service behaviour changes.
-2. Set `MigratesLegacyCommand = true` on the registrations of one service (bot-services and identity: AB#6910). Make sure the
+2. Set `MigratesLegacyCommand = true` on the registrations of one service (bot-services and identity). Make sure the
    handler is safe under competing consumers.
 3. Roll the service (rolling update). Old replicas keep the classic traffic; new replicas start cleanly and stand by; after the
    last old replica terminated, the new replicas take over within one probe interval and share the work.
@@ -593,9 +593,9 @@ sent after the take-over is processed exactly once.
 
 **Deprecation.** The classic registrations log one warning per command name and process. No `[Obsolete]` attribute: all consumer
 repositories build with warnings as errors, and consumers that are exclusive *by design* (one instance owns the address, for
-example per-pipeline command nodes) must keep compiling. The consumer list is in `CLAUDE.md`.
+example per-pipeline command nodes) must keep compiling. The consumer list is in `docs/command-consumers.md`.
 
-**Exclusive by design (AB#8363).** A consumer that must stay exclusive — exactly one instance owns the command address, for
+**Exclusive by design.** A consumer that must stay exclusive — exactly one instance owns the command address, for
 example a command addressed to one pipeline instance — declares it with a reason instead of staying silent:
 
 ```csharp
@@ -612,7 +612,7 @@ config.AddCommandConsumer<MyConsumer, MyRequest>("my-command",
 |---|---|
 | Topology | Identical to the classic registration of the same method: queue `{prefix}-{commandName}` (non-durable, auto-delete, exclusive), no `::shared` queue, no `::send` exchange, no bridge. Classic senders are unchanged. |
 | Deprecation warning | Not logged. Registrations without a declaration still warn exactly as before. |
-| Reason | `CommandConsumerOptions.ExclusiveByDesignReason`; must not be empty or whitespace (`ArgumentException` at registration; the factory `ExclusiveByDesign(reason)` checks it at once). Logged at `Debug` on dynamic registration. Write it for the next developer and list it in the `CLAUDE.md` audit table. |
+| Reason | `CommandConsumerOptions.ExclusiveByDesignReason`; must not be empty or whitespace (`ArgumentException` at registration; the factory `ExclusiveByDesign(reason)` checks it at once). Logged at `Debug` on dynamic registration. Write it for the next developer and list it in the audit table of `docs/command-consumers.md`. |
 | Rejected combinations | `MigratesLegacyCommand` (contradiction), `LegacyProbeInterval`, `ConfigureConsumeTopology = true` (shared-topology options) — `ArgumentException`. `SuppressFaults` stays unsupported by `AddCommandConsumer`. |
 | Applied options | `PrefetchCount`, `ConcurrentMessageLimit`; `SuppressFaults` on the dynamic `RegisterCommandConsumer` only. They are consumer-side settings and do not change the queue. |
 | Compatibility | Additive: a new property and factory on `CommandConsumerOptions`, no new interface member. The dynamic registration requires the `IEventHubControl` implementation of this library (test doubles that implement the interface directly get the default `NotSupportedException` of the options overloads). |
@@ -795,7 +795,7 @@ public class ScheduledJobService
 }
 ```
 
-### Consuming recurring ticks: latest-only consumers (AB#5709)
+### Consuming recurring ticks: latest-only consumers
 
 A recurring send is delivered into a **durable** queue. While its consumer is down, the ticks pile up,
 and a plain consumer then handles all of them at once — up to MassTransit's default prefetch
@@ -833,7 +833,7 @@ concurrency limit of 1 (validated; `ArgumentException` otherwise) because prefet
 counted as waiting by the broker. With N competing consumers the tail of a backlog can therefore still
 produce up to N runs (one per consumer, in parallel), e.g. briefly during a rolling update.
 
-Further notes from the AB#5709 review:
+Further notes from the review of that change:
 
 - `message-count` of `queue.declare-ok` is the number of **ready** messages; the delivery being decided
   on is unacknowledged and not included — for classic and for quorum queues (covered by
@@ -922,7 +922,7 @@ public async Task<GetUserResponse?> GetUserSafe(string userId)
 | `RepositoryAllowInsecureTls` | `bool` | `false` | Allow insecure TLS |
 | `DatabaseAuthenticationSource` | `string` | `admin` | MongoDB auth database |
 
-**Broker credentials (AB#8623).** When `BrokerUser` or `BrokerPassword` is null or whitespace, MassTransit 8.5.10 does not
+**Broker credentials.** When `BrokerUser` or `BrokerPassword` is null or whitespace, MassTransit 8.5.10 does not
 apply it and the RabbitMQ client default stays (`ConnectionFactory.DefaultUser`/`DefaultPass`, both `guest`); user and password
 are decided independently. The connections the library opens itself next to the bus (the legacy command bridge, the Hangfire
 legacy binding cleanup) are built by `BrokerConnectionFactory` with exactly this rule, so they always connect as the same user
@@ -996,7 +996,7 @@ Example with `InstancePrefix = "prod"`:
 
 ---
 
-## Broker permissions: the restricted adapter user (AB#7338)
+## Broker permissions: the restricted adapter user
 
 Adapter pods and edge sites connect with their own broker user (`octo-adapter-mq-user`), not with the core services' user. It can do
 everything on vhost `/` except on resources whose **name contains `octo::method::`** (CK method queues, their `::send` exchanges
@@ -1017,7 +1017,7 @@ What this means for code that runs in an adapter (or any process that connects w
   `::send` exchange of shared commands, MassTransit endpoints).
 
 The permissions are deployed by meshmakers-infrastructure (`rabbitmq_adapter_user_defaults`, runbook
-`docs/runbooks/rabbitmq-adapter-user.md` there) and by octo-tools (local brokers). `RestrictedAdapterUserTests` proves them on a real
+there) and by octo-tools (local brokers). `RestrictedAdapterUserTests` proves them on a real
 broker: the adapter bus works (shared, exclusive-by-design, routed event), and consume, get, bind, declare, delete, purge and publish
 on a method queue, its send exchange and via the default exchange are refused while a core-user handler keeps serving.
 `RestrictedAdapterUser` (tests/.../Fixtures) holds the same three patterns; change them in all three places together.

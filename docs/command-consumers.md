@@ -3,7 +3,7 @@ description: Exclusive versus shared command consumers: topologies, the legacy b
 applies_to: src/DistributionEventHub/Services/Legacy*.cs, src/DistributionEventHub/Services/EventHubControl.cs, src/DistributionEventHub/Configuration/BrokerConnectionFactory.cs, tests/**/Legacy*.cs
 ---
 
-### Command consumers: exclusive (classic) versus shared (AB#6909)
+### Command consumers: exclusive (classic) versus shared
 
 `AddCommandConsumer(name)` and `RegisterCommandConsumer(name, handler)` (without options) declare a non-durable
 auto-delete queue, which MassTransit forces to **exclusive**: one process at a time consumes the command, further
@@ -29,7 +29,7 @@ permanent binding would process each classic command twice while an old replica 
 runs the same idempotent reconcile every `LegacyProbeInterval` (default 2 s): passive declare of the classic queue (405 or
 success = alive, 404 = gone) -> alive: unbind (new replicas stand by, the old one keeps all classic traffic); gone: declare the
 exchange with the classic arguments (fanout, non-durable, auto-delete) and bind. The shared queue is never created by the
-bridge. **Probe back-off (AB#8404):** a passive declare of a missing queue is a channel exception that RabbitMQ logs as an
+bridge. **Probe back-off:** a passive declare of a missing queue is a channel exception that RabbitMQ logs as an
 error, and "no classic queue" is the steady state after the migration (~600k error lines per cluster and day at a fixed 2 s
 with 3.5.65). While `Bound`, the classic probe backs off 1, 2, 4, … intervals up to 60 intervals (2 min at the default;
 `LegacyProbeSchedule`, `MaxIntervalFactor`); every other state probes every interval. Between backed-off probes the bridge
@@ -38,8 +38,8 @@ replaces replicas) probes at once and restarts the back-off. Known windows: afte
 commands reach no queue until the next pass (≤ one interval; the sender's timeout/retry covers it, as for every restart of the
 former single consumer); if a classic replica (re)starts while the shared queue is bound (rollback), commands are copied to
 both until the next classic probe — ≤ 61 intervals (2 min 2 s), ≤ one interval when the shared consumer count changes too.
-**No RabbitMQ errors in the steady state (AB#8408).** The back-off bounded the errors per bridge, but one bridge runs per
-migrated command *and replica* (test-2 with 2 replicas: 0.233 ERROR lines/s, alarm `ApplicationErrorLogRateHigh` at 0.2/s).
+**No RabbitMQ errors in the steady state.** The back-off bounded the errors per bridge, but one bridge runs per
+migrated command *and replica* (a test environment with 2 replicas: 0.233 ERROR lines/s, alarm `ApplicationErrorLogRateHigh` at 0.2/s).
 Decision: while `Bound`, the classic probe is a **mandatory publish** to the default exchange (routing key = classic queue
 name, publisher confirms, `LegacyClassicProbe`): no queue → `basic.return`, which RabbitMQ does not log; queue present → the
 probe is routed, the bridge steps aside. Every other state (first pass, `LegacyConsumerPresent`, `Faulted`) keeps the passive
@@ -47,7 +47,7 @@ declare, so a live classic consumer during a migration rollout never receives pr
 classic queue is not probed at all. A routed probe reaches a classic consumer only in the rollback case, once per detection:
 transient, `expiration: 0`, a MassTransit envelope of an unhandled type (`urn:message:…:LegacyCommandBridgeProbe`), so a
 classic MassTransit endpoint skips it instead of faulting. A broker user without write on `amq.default` (the restricted
-adapter user, AB#7338) gets 403 once; the bridge then falls back to the passive declare with the back-off for its lifetime
+adapter user) gets 403 once; the bridge then falls back to the passive declare with the back-off for its lifetime
 (WARN log). Net effect: at most one `not_found` error pair per bridge start, none afterwards, whatever the replica count; the
 back-off, the consumer-count trigger and the reaction bound are unchanged. Rejected: the management HTTP API (extra
 endpoint, port and user tag per environment), "stop probing until restart" (a rollback would double-process until the next
@@ -57,25 +57,25 @@ can still be added later). Tests: `LegacyProbeScheduleTests`, `LegacyClassicProb
 testcontainer), `Bound_ClassicConsumerAppears_PublishProbeSeesIt_…`, `SharedQueueMissing_DoesNotProbeTheClassicQueue`,
 `UserWithoutDefaultExchangeWrite_FallsBackToPassiveDeclare_…`, `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_…`,
 `BackgroundLoop_SharedConsumerCountChanges_…`.
-**Clock (AB#8624):** the loop timer and the schedule's clock come from an optional `TimeProvider` constructor argument of
+**Clock:** the loop timer and the schedule's clock come from an optional `TimeProvider` constructor argument of
 `LegacyCommandBridge` (`TimeProvider.System` by default, production timing unchanged). The reaction-bound test drives a
 `FakeTimeProvider` tick by tick (`CompletedPasses` is the sync point), because the wall-clock version failed under the full
 parallel suite from host scheduling delays, not from the bridge (`docs/TEST-CONCEPT.md`, "Timing assertions under parallel load").
-**Broker credentials (AB#8623):** the bridge and the Hangfire legacy binding cleanup build their RabbitMQ connection with
+**Broker credentials:** the bridge and the Hangfire legacy binding cleanup build their RabbitMQ connection with
 `Configuration/BrokerConnectionFactory`, which applies `BrokerUser`/`BrokerPassword` exactly like MassTransit 8.5.10 (null or
 whitespace → not applied, RabbitMQ client default `guest`). Never assign `RabbitMqTransportOptions.User`/`Pass` to a
 `ConnectionFactory` directly: with no broker user configured that throws `Value cannot be null (Parameter 'userName')` while
 the bus connects. Tests: `BrokerConnectionFactoryTests`, `NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds`.
 Every migrated command has its own bridge. For DI registrations one `LegacyCommandBridgeObserver` per configuration owns
 the bridges of all migrated commands, because MassTransit's `AddBusObserver` keeps only one registration per observer type
-(`TryAddEnumerable`); one observer per command served only the first migrated command of a process (AB#8368, fixed in
+(`TryAddEnumerable`); one observer per command served only the first migrated command of a process (fixed in
 the release after 3.5.64; pinned by `SeveralMigratedCommandsInOneProcess_…` and
 `AddCommandConsumer_SeveralMigratedCommands_OneObserverStartsOneBridgePerCommand`). Do not register further per-command
 bus observers with `AddBusObserver`. Dynamic registrations (`RegisterCommandConsumer`) create a bridge per handle.
 
 **Rolling update (old = exclusive, new = migrating), one service at a time:**
 1. Release the event hub library (this change). No behaviour changes until a consumer opts in.
-2. Switch the consumer registrations of ONE service to `MigratesLegacyCommand = true` (AB#6910 for bot-services and identity).
+2. Switch the consumer registrations of ONE service to `MigratesLegacyCommand = true` (bot-services and identity).
    Senders are untouched, so there is no order between services and no sender-first or consumer-first constraint.
 3. Roll the service. While an old replica is alive it keeps every classic command; the new replicas start without error and
    stand by (INFO "a classic exclusive consumer ... is alive"). When the last old replica terminates, the new replicas bind
@@ -93,23 +93,23 @@ The handler must be safe under competing consumers (no state shared between mess
 Operations: queues named `*::shared` and exchanges `*::send` are new names; broker policies or monitoring that match command
 queue names (Platform Ops) must include them. Details and API: `docs/DEVELOPER.md` -> "Migrating exclusive command queues".
 
-**Exclusive by design (AB#8363).** A consumer that must stay exclusive (exactly one instance owns the address) declares it
+**Exclusive by design.** A consumer that must stay exclusive (exactly one instance owns the address) declares it
 with `CommandConsumerOptions.ExclusiveByDesign("<reason>")` on `AddCommandConsumer(name, options)` or
 `RegisterCommandConsumer(name, handler, options)`: classic exclusive topology unchanged, no deprecation warning. An empty
 reason, or a combination with `MigratesLegacyCommand`, `LegacyProbeInterval` or `ConfigureConsumeTopology`, is rejected at
 registration. Put the reason into the "Exclusive-by-design reason" column below; "—" means not declared yet (still warns).
-Details: `docs/DEVELOPER.md` -> "Exclusive by design (AB#8363)".
+Details: `docs/DEVELOPER.md` -> "Exclusive by design".
 
 **Command consumers in the monorepo** (snapshot of `main` on 2026-11-06; senders in the fifth column). The two
-octo-bot-services rows were migrated with meshmakers/octo-bot-services#51 (AB#6910, merged 2026-11-06); the
-octo-mesh-adapter row was declared with AB#8405.
+octo-bot-services rows were migrated with meshmakers/octo-bot-services#51 (merged 2026-11-06); the
+octo-mesh-adapter row declares its consumer exclusive by design.
 
 | Repository | Registration | Command (queue name) | Kind | Senders | Exclusive-by-design reason |
 |---|---|---|---|---|---|
-| octo-bot-services (`Consumers/BotCommandConsumers.cs`, called from `Program.cs`) — octo-bot-services#51 | `AddCommandConsumer(name, CommandConsumerOptions { MigratesLegacyCommand = true })` (`ModelCommandsConsumer`) | `octo::bot::import-ck`, `import-ck-batch`, `import-rt`, `export-rt-by-query`, `export-rt-by-deep-graph` (queues `…::shared`) | shared, migrated (AB#6910) | octo-asset-repo-services (`ModelsController`, `AddCommandClient`) | n/a (shared) |
-| octo-bot-services (`Consumers/BotCommandConsumers.cs`) — octo-bot-services#51 | `AddCommandConsumer(name, CommandConsumerOptions { MigratesLegacyCommand = true })` (`RecurringJobConsumer`) | `octo::bot::remove-recurring-jobs-by-schedule-group` (queue `…::shared`) | shared, migrated (AB#6910) | octo-communication-controller-services, octo-ai-services, octo-mcp-service (`AddCommandClient`) | n/a (shared) |
-| octo-identity-services (`Consumers/IdentityCommandConsumers.cs`, called from `Program.cs`) | `AddCommandConsumer(name, CommandConsumerOptions { MigratesLegacyCommand = true })` (`CreateIdentityDataCommandRequestConsumer`) | `octo::identity::create-identity-data` (queue `…::shared`) | shared, migrated (AB#6910) | asset-repo, bot, communication-controller, ai, mcp, report (`AddCommandClient`, `DefaultConfigurationCreatorService`) | n/a (shared) |
-| octo-communication-sdk (`FromPipelineDataEventNode`) — octo-communication-sdk#38 | `RegisterCommandConsumer(name, h, CommandConsumerOptions.ExclusiveByDesign(…))` per pipeline | `pipelinedatacommand-{tenant}-dataflow-{id}-pipeline-{id}` | exclusive by design, addressed to one pipeline instance (AB#8363, AB#8105) | `ToPipelineDataEventNode` (`GetCommandResponseAsync`) | Per-pipeline address, classic sender; shared would need one legacy bridge per pipeline (2 s probe) for every pipeline of every adapter, so it moves only with a sender migration (`FromPipelineDataEventNode.CommandExclusiveByDesignReason`, AB#8105) |
-| octo-communication-sdk (`FromExecutePipelineCommandNode`) — octo-communication-sdk#38 | `RegisterCommandConsumer(name, h, CommandConsumerOptions.ExclusiveByDesign(…))` per pipeline | `octo::...execute-pipeline-{tenant}-pipeline-{id}` (`PipelineQueueNames.ExecutePipelineCommand`) | exclusive by design, addressed to one pipeline instance (AB#8363, AB#8105) | communication-controller `TriggerManagementService` (`IRoutedCommandClient`) | Per-pipeline address, classic sender; a further adapter replica is a hot standby; shared would need one legacy bridge per pipeline (2 s probe), so it moves only with a sender migration (`FromExecutePipelineCommandNode.ExclusiveByDesignReason`, AB#8105) |
-| octo-mesh-adapter (`FromSendNotificationNode`) — AB#8405 | `RegisterCommandConsumer(name, h, CommandConsumerOptions.ExclusiveByDesign(…))` per data flow | `octo::com-controller::send-notification-pipeline-{tenant}-data-flow-{id}` | exclusive by design, one endpoint per data flow (AB#8363, AB#8405) | none by name: identity-services (`NotificationEmailOtpDeliveryChannel`) and common-services (`NotificationService`) **publish** `SendNotificationsRequest` (`PublishAsync`), which reaches the queue through its message-type binding | The endpoint is fed by publish through the classic queue's default consume topology; exclusive by design keeps that binding, the shared options switch it off (and exclusive by design refuses `ConfigureConsumeTopology`), so it moves only with a change of the publishers; a further adapter replica is a hot standby (`FromSendNotificationNode.ExclusiveByDesignReason`, AB#8405) |
-| octo-common-services (`CkMethodHandlerStartupService`), octo-communication-controller-services (`PipelineMethodHost`) | `RegisterCommandConsumer(..., CommandConsumerOptions)` | CK method queues `octo::method::...` | already shared (plain topology, AB#6891/AB#5671) | CK method dispatch | n/a (shared) |
+| octo-bot-services (`Consumers/BotCommandConsumers.cs`, called from `Program.cs`) — octo-bot-services#51 | `AddCommandConsumer(name, CommandConsumerOptions { MigratesLegacyCommand = true })` (`ModelCommandsConsumer`) | `octo::bot::import-ck`, `import-ck-batch`, `import-rt`, `export-rt-by-query`, `export-rt-by-deep-graph` (queues `…::shared`) | shared, migrated | octo-asset-repo-services (`ModelsController`, `AddCommandClient`) | n/a (shared) |
+| octo-bot-services (`Consumers/BotCommandConsumers.cs`) — octo-bot-services#51 | `AddCommandConsumer(name, CommandConsumerOptions { MigratesLegacyCommand = true })` (`RecurringJobConsumer`) | `octo::bot::remove-recurring-jobs-by-schedule-group` (queue `…::shared`) | shared, migrated | octo-communication-controller-services, octo-ai-services, octo-mcp-service (`AddCommandClient`) | n/a (shared) |
+| octo-identity-services (`Consumers/IdentityCommandConsumers.cs`, called from `Program.cs`) | `AddCommandConsumer(name, CommandConsumerOptions { MigratesLegacyCommand = true })` (`CreateIdentityDataCommandRequestConsumer`) | `octo::identity::create-identity-data` (queue `…::shared`) | shared, migrated | asset-repo, bot, communication-controller, ai, mcp, report (`AddCommandClient`, `DefaultConfigurationCreatorService`) | n/a (shared) |
+| octo-communication-sdk (`FromPipelineDataEventNode`) — octo-communication-sdk#38 | `RegisterCommandConsumer(name, h, CommandConsumerOptions.ExclusiveByDesign(…))` per pipeline | `pipelinedatacommand-{tenant}-dataflow-{id}-pipeline-{id}` | exclusive by design, addressed to one pipeline instance | `ToPipelineDataEventNode` (`GetCommandResponseAsync`) | Per-pipeline address, classic sender; shared would need one legacy bridge per pipeline (2 s probe) for every pipeline of every adapter, so it moves only with a sender migration (`FromPipelineDataEventNode.CommandExclusiveByDesignReason`) |
+| octo-communication-sdk (`FromExecutePipelineCommandNode`) — octo-communication-sdk#38 | `RegisterCommandConsumer(name, h, CommandConsumerOptions.ExclusiveByDesign(…))` per pipeline | `octo::...execute-pipeline-{tenant}-pipeline-{id}` (`PipelineQueueNames.ExecutePipelineCommand`) | exclusive by design, addressed to one pipeline instance | communication-controller `TriggerManagementService` (`IRoutedCommandClient`) | Per-pipeline address, classic sender; a further adapter replica is a hot standby; shared would need one legacy bridge per pipeline (2 s probe), so it moves only with a sender migration (`FromExecutePipelineCommandNode.ExclusiveByDesignReason`) |
+| octo-mesh-adapter (`FromSendNotificationNode`) | `RegisterCommandConsumer(name, h, CommandConsumerOptions.ExclusiveByDesign(…))` per data flow | `octo::com-controller::send-notification-pipeline-{tenant}-data-flow-{id}` | exclusive by design, one endpoint per data flow | none by name: identity-services (`NotificationEmailOtpDeliveryChannel`) and common-services (`NotificationService`) **publish** `SendNotificationsRequest` (`PublishAsync`), which reaches the queue through its message-type binding | The endpoint is fed by publish through the classic queue's default consume topology; exclusive by design keeps that binding, the shared options switch it off (and exclusive by design refuses `ConfigureConsumeTopology`), so it moves only with a change of the publishers; a further adapter replica is a hot standby (`FromSendNotificationNode.ExclusiveByDesignReason`) |
+| octo-common-services (`CkMethodHandlerStartupService`), octo-communication-controller-services (`PipelineMethodHost`) | `RegisterCommandConsumer(..., CommandConsumerOptions)` | CK method queues `octo::method::...` | already shared (plain topology) | CK method dispatch | n/a (shared) |

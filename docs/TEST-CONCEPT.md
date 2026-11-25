@@ -1287,7 +1287,7 @@ public class IsolationTestConsumer : IDistributedConsumer<IsolationTestMessage>
 }
 ```
 
-### 6. Shared Command Endpoint Integration Tests (AB#5671)
+### 6. Shared Command Endpoint Integration Tests
 
 **File:** `Messaging/CommandSendOptionsTests.cs` — `CommandConsumerOptions` / `CommandSendOptions` overloads used by CK methods.
 
@@ -1317,7 +1317,7 @@ public class IsolationTestConsumer : IDistributedConsumer<IsolationTestMessage>
 
 ---
 
-### 8. Exclusive to Shared Command Queue Migration (AB#6909)
+### 8. Exclusive to Shared Command Queue Migration
 
 **Files:** `Messaging/LegacyCommandMigrationTests.cs` (mixed fleets with a ledger of processed commands),
 `Messaging/LegacyCommandBridgeTests.cs` (state machine against raw broker entities), unit tests in
@@ -1334,15 +1334,15 @@ public class IsolationTestConsumer : IDistributedConsumer<IsolationTestMessage>
 | `Premise_SameNameSharedTopology_ConflictsWithTheClassicQueueAndExchange` | documents why the shared queue needs its own name (405 on the queue, 406 on the exchange) |
 | `DynamicRegistration_WithMigrationSwitch_SharesTheQueue_AndServesClassicSenders` | `RegisterCommandConsumer(..., options)` with the switch; disposing a handle leaves the other serving |
 | bridge: `NoClassicConsumer_BindsSharedQueueToClassicExchange_AndClassicTrafficArrives`, `ClassicConsumerAlive_DoesNotBind_...`, `ClassicConsumerStartsWhileBound_BridgeUnbinds`, `ClassicExchangeWithOtherArguments_...`, `BrokerUnreachable_...`, `BackgroundLoop_FollowsTheClassicConsumer_AndDisposeIsIdempotent` | the reconcile state machine and its failure cases |
-| bridge back-off (AB#8404): `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_StepsAsideWithinCapPlusOneInterval`, `BackgroundLoop_SharedConsumerCountChanges_ProbesAtOnceDespiteTheBackOff` | a classic consumer is still seen within 61 intervals, at once when the shared consumer count changes. The first test runs the bridge on a `FakeTimeProvider` (AB#8624): it advances one interval per tick to the cap, starts the classic consumer right after the probe that set the cap (worst case), and proves on the bridge's clock that no classic probe runs before the backed-off one and that this first probe sees the consumer within cap + one interval |
-| bridge without steady-state errors (AB#8408): `BackgroundLoop_NoClassicQueue_TwoReplicas_NoRecurringChannelExceptions`, `Bound_ClassicConsumerAppears_PublishProbeSeesIt_WithoutChannelException_AndLeavesNoMessage`, `SharedQueueMissing_DoesNotProbeTheClassicQueue`, `UserWithoutDefaultExchangeWrite_FallsBackToPassiveDeclare_AndStillStepsAside` | two bridges with no classic queue: exactly one RabbitMQ `not_found` log line per bridge start, none over the following 12 s; the error-free publish probe still detects a classic queue and leaves no message in it; no classic probe while the shared queue is missing; a user without write on `amq.default` falls back to the passive declare once and still steps aside |
-| bridge without a configured broker user (AB#8623): `NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds` | with `User`/`Pass` null the bridge connects with the RabbitMQ client defaults (`guest`, like MassTransit) and binds |
-| unit `BrokerConnectionFactoryTests` (AB#8623) | null or blank user/password keep the RabbitMQ client defaults, a configured user is used, user and password are decided independently (MassTransit 8.5.10 rule); host, port, virtual host, TLS and client name |
-| unit `LegacyClassicProbeTests` (AB#8408) | mandatory publish only while `Bound` and not refused before; passive declare in every other state; probe message transient, `expiration: 0`, MassTransit envelope of the unhandled probe type |
-| unit `LegacyProbeScheduleTests` (AB#8404) | gaps 1, 2, 4, … up to 60 intervals while bound; full speed in every other state; reaction bound; < 5 % of the former probes per day |
+| bridge back-off: `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_StepsAsideWithinCapPlusOneInterval`, `BackgroundLoop_SharedConsumerCountChanges_ProbesAtOnceDespiteTheBackOff` | a classic consumer is still seen within 61 intervals, at once when the shared consumer count changes. The first test runs the bridge on a `FakeTimeProvider`: it advances one interval per tick to the cap, starts the classic consumer right after the probe that set the cap (worst case), and proves on the bridge's clock that no classic probe runs before the backed-off one and that this first probe sees the consumer within cap + one interval |
+| bridge without steady-state errors: `BackgroundLoop_NoClassicQueue_TwoReplicas_NoRecurringChannelExceptions`, `Bound_ClassicConsumerAppears_PublishProbeSeesIt_WithoutChannelException_AndLeavesNoMessage`, `SharedQueueMissing_DoesNotProbeTheClassicQueue`, `UserWithoutDefaultExchangeWrite_FallsBackToPassiveDeclare_AndStillStepsAside` | two bridges with no classic queue: exactly one RabbitMQ `not_found` log line per bridge start, none over the following 12 s; the error-free publish probe still detects a classic queue and leaves no message in it; no classic probe while the shared queue is missing; a user without write on `amq.default` falls back to the passive declare once and still steps aside |
+| bridge without a configured broker user: `NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds` | with `User`/`Pass` null the bridge connects with the RabbitMQ client defaults (`guest`, like MassTransit) and binds |
+| unit `BrokerConnectionFactoryTests` | null or blank user/password keep the RabbitMQ client defaults, a configured user is used, user and password are decided independently (MassTransit 8.5.10 rule); host, port, virtual host, TLS and client name |
+| unit `LegacyClassicProbeTests` | mandatory publish only while `Bound` and not refused before; passive declare in every other state; probe message transient, `expiration: 0`, MassTransit envelope of the unhandled probe type |
+| unit `LegacyProbeScheduleTests` | gaps 1, 2, 4, … up to 60 intervals while bound; full speed in every other state; reaction bound; < 5 % of the former probes per day |
 | unit | switch is off by default; queue naming; interface default implementation; `SuppressFaults` rejected; endpoint definition only with options; deprecation logged once per name |
 
-### Timing assertions under parallel load (AB#8624)
+### Timing assertions under parallel load
 
 A wall-clock bound measures the bridge **and** the test host. Under the full parallel suite the host delivers timer ticks
 and `Task.Delay` continuations late (measured 2026-11-09 in 6 traced full runs: ticks of a 100 ms timer up to 440 ms apart,

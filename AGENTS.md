@@ -57,13 +57,13 @@ dotnet build Octo.DistributedEventHub.sln -c DebugL
 dotnet build Octo.DistributedEventHub.sln -c Release -p:OctoVersion=3.5.1
 ```
 
-Versions come only from the pipeline (AB#6291): `Directory.Build.props` has no release fallback, so a
+Versions come only from the pipeline: `Directory.Build.props` has no release fallback, so a
 Debug/Release build without `-p:OctoVersion=X.Y.Z` (or `-p:OctoNugetPrivateServer=<feed>` for the main
 line `0.1.*`) fails fast with MSBuild error `OCTO0001`. Use `-c DebugL` locally.
 
 Unit tests: `tests/DistributionEventHub.UnitTests`; integration tests (Testcontainers RabbitMQ/MongoDB, Docker required): `tests/DistributionEventHub.IntegrationTests`.
 
-CI (`azure-pipelines.yml`): `Build src and tests` builds `src/**` plus the `*Tests` projects once; `Test` then runs `dotnet test --no-build --no-restore` per project, sequentially (AB#6093). A new test project outside `tests/**/*Tests.csproj` must be added to the build step's project list.
+CI (`azure-pipelines.yml`): `Build src and tests` builds `src/**` plus the `*Tests` projects once; `Test` then runs `dotnet test --no-build --no-restore` per project, sequentially. A new test project outside `tests/**/*Tests.csproj` must be added to the build step's project list.
 
 ```bash
 # Unit tests
