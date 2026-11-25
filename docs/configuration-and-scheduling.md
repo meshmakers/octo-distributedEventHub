@@ -1,6 +1,6 @@
 ---
 description: Configuration pattern, instance prefix, Hangfire scheduler queue isolation and recurring-send time zones
-applies_to: src/DistributionEventHub/Configuration/**, src/DistributionEventHub/RecurringSchedulingOptions.cs, src/DistributionEventHub/Services/OctoRecurringSchedule.cs, tests/**/HangfireScheduler*.cs
+applies_to: src/**/Configuration/**, src/**/RecurringSchedulingOptions.cs, src/**/OctoRecurringSchedule.cs, tests/**/HangfireScheduler*.cs
 ---
 
 Recurring sends (`ScheduleRecurringSendAsync` with `RecurringSchedulingOptions`) evaluate the cron in
@@ -16,7 +16,7 @@ Services configure the event hub via `AddDistributionEventHub()`:
 services.AddDistributionEventHub(config =>
 {
     config.UniqueServiceAddress = "my-service";  // Required
-    config.InstancePrefix = "prod";              // Required - isolates environments
+    config.InstancePrefix = "prod";              // Default "default" - isolates environments
 
     config.AddBroadcastEventConsumer<TConsumer, TMessage>();
     config.AddRoutedEventConsumer<TConsumer, TMessage>("queue-name");

@@ -6,6 +6,8 @@ applies_to: tests/**
 
 This document describes the testing strategy for the DistributionEventHub library, covering unit tests and integration tests.
 
+The code listings below are illustrative sketches of the test style, not copies: the real tests are in the two test projects (`tests/DistributionEventHub.UnitTests`, `tests/DistributionEventHub.IntegrationTests`) and differ in method names, fixture details, delays and the xunit v3 async signatures. Where this text and the tests differ, the tests win.
+
 ## Table of Contents
 
 1. [Test Strategy Overview](#test-strategy-overview)
@@ -42,48 +44,17 @@ This document describes the testing strategy for the DistributionEventHub librar
 
 ### Testing Frameworks
 
-- **xUnit** - Test framework
+- **xunit v3** - Test framework
 - **Moq** - Mocking framework
 - **FluentAssertions** - Assertion library
 - **Testcontainers** - Docker containers for integration tests
-- **MassTransit.Testing** - In-memory test harness for messaging
+- **Microsoft.Extensions.TimeProvider.Testing** - fake clock for timing-dependent tests (integration project)
 
 ---
 
 ## Project Structure
 
-```
-tests/
-├── DistributionEventHub.Tests/
-│   ├── Unit/
-│   │   ├── Services/
-│   │   │   ├── CommandClientTests.cs
-│   │   │   ├── RoutedCommandClientTests.cs
-│   │   │   ├── DistributionEventHubServiceTests.cs
-│   │   │   └── DistributedCacheServiceTests.cs
-│   │   ├── Consumers/
-│   │   │   ├── DistributedConsumerTests.cs
-│   │   │   └── DistributedContextTests.cs
-│   │   ├── Configuration/
-│   │   │   ├── DistributionEventHubConfigurationTests.cs
-│   │   │   └── ServiceCollectionExtensionsTests.cs
-│   │   ├── Utilities/
-│   │   │   └── CacheCommonTests.cs
-│   │   └── Exceptions/
-│   │       ├── DistributionTimeoutExceptionTests.cs
-│   │       └── DistributedOperationFailedExceptionTests.cs
-│   └── Integration/
-│       ├── Messaging/
-│       │   ├── BroadcastEventTests.cs
-│       │   ├── RoutedEventTests.cs
-│       │   └── CommandClientIntegrationTests.cs
-│       ├── Caching/
-│       │   └── MongoDbCachingTests.cs
-│       └── Fixtures/
-│           ├── RabbitMqFixture.cs
-│           └── MongoDbFixture.cs
-└── DistributionEventHub.Tests.csproj
-```
+Two test projects: `tests/DistributionEventHub.UnitTests` (`Configuration`, `Consumers`, `Exceptions`, `Services`, `Utilities`) and `tests/DistributionEventHub.IntegrationTests` (`Caching`, `Fixtures`, `Messaging`). The `**File:**` paths below are relative to the matching project: `Unit/...` is the unit project, `Integration/...` and a bare `Messaging/...` the integration project.
 
 ---
 
@@ -1337,7 +1308,7 @@ public class IsolationTestConsumer : IDistributedConsumer<IsolationTestMessage>
 | bridge back-off: `BackgroundLoop_ClassicConsumerAppearsAfterFullBackOff_StepsAsideWithinCapPlusOneInterval`, `BackgroundLoop_SharedConsumerCountChanges_ProbesAtOnceDespiteTheBackOff` | a classic consumer is still seen within 61 intervals, at once when the shared consumer count changes. The first test runs the bridge on a `FakeTimeProvider`: it advances one interval per tick to the cap, starts the classic consumer right after the probe that set the cap (worst case), and proves on the bridge's clock that no classic probe runs before the backed-off one and that this first probe sees the consumer within cap + one interval |
 | bridge without steady-state errors: `BackgroundLoop_NoClassicQueue_TwoReplicas_NoRecurringChannelExceptions`, `Bound_ClassicConsumerAppears_PublishProbeSeesIt_WithoutChannelException_AndLeavesNoMessage`, `SharedQueueMissing_DoesNotProbeTheClassicQueue`, `UserWithoutDefaultExchangeWrite_FallsBackToPassiveDeclare_AndStillStepsAside` | two bridges with no classic queue: exactly one RabbitMQ `not_found` log line per bridge start, none over the following 12 s; the error-free publish probe still detects a classic queue and leaves no message in it; no classic probe while the shared queue is missing; a user without write on `amq.default` falls back to the passive declare once and still steps aside |
 | bridge without a configured broker user: `NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds` | with `User`/`Pass` null the bridge connects with the RabbitMQ client defaults (`guest`, like MassTransit) and binds |
-| unit `BrokerConnectionFactoryTests` | null or blank user/password keep the RabbitMQ client defaults, a configured user is used, user and password are decided independently (MassTransit 8.5.10 rule); host, port, virtual host, TLS and client name |
+| unit `BrokerConnectionFactoryTests` | null or blank user/password keep the RabbitMQ client defaults, a configured user is used, user and password are decided independently (MassTransit 8.5.x rule, checked with 8.5.10); host, port, virtual host, TLS and client name |
 | unit `LegacyClassicProbeTests` | mandatory publish only while `Bound` and not refused before; passive declare in every other state; probe message transient, `expiration: 0`, MassTransit envelope of the unhandled probe type |
 | unit `LegacyProbeScheduleTests` | gaps 1, 2, 4, … up to 60 intervals while bound; full speed in every other state; reaction bound; < 5 % of the former probes per day |
 | unit | switch is off by default; queue naming; interface default implementation; `SuppressFaults` rejected; endpoint definition only with options; deprecation logged once per name |
@@ -1359,51 +1330,9 @@ the bridge probed exactly on schedule (reaction 5981-6288 ms in the traced runs)
 
 ## Test Infrastructure
 
-### Test Project File
+### Test Projects
 
-**File:** `tests/DistributionEventHub.Tests/DistributionEventHub.Tests.csproj`
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
-    <PackageReference Include="xunit" Version="2.*" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.*" />
-    <PackageReference Include="Moq" Version="4.*" />
-    <PackageReference Include="FluentAssertions" Version="6.*" />
-    <PackageReference Include="Testcontainers.RabbitMq" Version="3.*" />
-    <PackageReference Include="Testcontainers.MongoDb" Version="3.*" />
-    <PackageReference Include="MassTransit.Testing" Version="8.5.7" />
-    <PackageReference Include="coverlet.collector" Version="6.*" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\DistributionEventHub\DistributionEventHub.csproj" />
-    <ProjectReference Include="..\..\src\DistributionEventHub.MongoDB\DistributionEventHub.MongoDB.csproj" />
-  </ItemGroup>
-
-</Project>
-```
-
-### Test Settings
-
-**File:** `tests/DistributionEventHub.Tests/xunit.runner.json`
-
-```json
-{
-  "parallelizeAssembly": false,
-  "parallelizeTestCollections": false,
-  "maxParallelThreads": 1
-}
-```
+`tests/DistributionEventHub.UnitTests` and `tests/DistributionEventHub.IntegrationTests` (xunit v3 and FluentAssertions; Moq in the unit project; Testcontainers for RabbitMQ and MongoDB and `Microsoft.Extensions.TimeProvider.Testing` in the integration project). The package versions are in the two project files.
 
 ---
 
@@ -1457,113 +1386,31 @@ public static class TestHelpers
 
 ## CI/CD Integration
 
-### GitHub Actions Workflow
+### Pipeline
 
-**File:** `.github/workflows/tests.yml`
-
-```yaml
-name: Tests
-
-on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
-
-jobs:
-  unit-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build --no-restore
-
-      - name: Run Unit Tests
-        run: dotnet test tests/DistributionEventHub.Tests --no-build --filter "Category!=Integration" --verbosity normal --collect:"XPlat Code Coverage"
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          files: '**/coverage.cobertura.xml'
-
-  integration-tests:
-    runs-on: ubuntu-latest
-    services:
-      rabbitmq:
-        image: rabbitmq:3-management
-        ports:
-          - 5672:5672
-          - 15672:15672
-      mongodb:
-        image: mongo:7
-        ports:
-          - 27017:27017
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build --no-restore
-
-      - name: Run Integration Tests
-        run: dotnet test tests/DistributionEventHub.Tests --no-build --filter "Category=Integration" --verbosity normal
-        env:
-          RABBITMQ_HOST: localhost
-          MONGODB_HOST: localhost
-```
+The tests run in the pipeline `azure-pipelines.yml` (see "Build & test" in `AGENTS.md`); the repository has no GitHub Actions test workflow.
 
 ### Test Categories
 
-Use `[Trait]` attributes to categorize tests:
-
-```csharp
-// Unit test
-[Fact]
-[Trait("Category", "Unit")]
-public void MyUnitTest() { }
-
-// Integration test
-[Fact]
-[Trait("Category", "Integration")]
-public async Task MyIntegrationTest() { }
-```
+Integration test classes carry `[Trait("Category", "Integration")]` and a collection (`RabbitMQ` or `MongoDB`); two classes add a further category (`RoutedEventExplicitQueue`, `RoutedEventLatestOnly`). Many unit test classes carry `[Trait("Category", "Unit")]`, not all.
 
 ---
 
 ## Test Execution Commands
 
 ```bash
-# Run all tests
-dotnet test
-
 # Run only unit tests
-dotnet test --filter "Category!=Integration"
+dotnet test tests/DistributionEventHub.UnitTests -c DebugL
 
 # Run only integration tests
-dotnet test --filter "Category=Integration"
+dotnet test tests/DistributionEventHub.IntegrationTests -c DebugL
 
 # Run with coverage
-dotnet test --collect:"XPlat Code Coverage"
+dotnet test tests/DistributionEventHub.UnitTests -c DebugL --collect:"XPlat Code Coverage"
 
 # Run specific test class
-dotnet test --filter "FullyQualifiedName~CommandClientTests"
+dotnet test tests/DistributionEventHub.UnitTests -c DebugL --filter "FullyQualifiedName~CommandClientTests"
 
 # Run specific test method
-dotnet test --filter "FullyQualifiedName~GetResponse_Success_ReturnsResponseMessage"
+dotnet test tests/DistributionEventHub.UnitTests -c DebugL --filter "FullyQualifiedName~GetResponse_Success_ReturnsResponseMessage"
 ```

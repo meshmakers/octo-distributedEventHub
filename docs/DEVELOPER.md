@@ -34,9 +34,9 @@ We are staying on v8 and monitoring the development of **OpenTransit** as a pote
 ### NuGet Packages
 
 ```xml
-<PackageReference Include="Meshmakers.Octo.Common.DistributionEventHub" Version="3.3.*" />
+<PackageReference Include="Meshmakers.Octo.Common.DistributionEventHub" Version="3.5.*" />
 <!-- Optional for MongoDB file caching -->
-<PackageReference Include="Meshmakers.Octo.Common.DistributionEventHub.MongoDB" Version="3.3.*" />
+<PackageReference Include="Meshmakers.Octo.Common.DistributionEventHub.MongoDB" Version="3.5.*" />
 ```
 
 ### Basic Setup
@@ -50,7 +50,7 @@ services.AddDistributionEventHub(config =>
     // Required: Unique service address
     config.UniqueServiceAddress = "MyService";
 
-    // Required: Instance prefix for environment isolation
+    // Instance prefix for environment isolation (default: "default")
     // Can also be set via appsettings.json
     config.InstancePrefix = "production";
 
@@ -204,7 +204,7 @@ public class ProcessDataConsumer : IDistributedConsumer<ProcessDataEvent>
 config.AddRoutedEventConsumer<ProcessDataConsumer, ProcessDataEvent>("data-processor");
 ```
 
-**Without explicit address (uses message type as queue name):**
+**Without explicit address (uses `{prefix}-octo::service::{full message type name}` as the queue name):**
 ```csharp
 config.AddRoutedEventConsumer<ProcessDataConsumer, ProcessDataEvent>();
 ```
@@ -329,6 +329,8 @@ var response = await _userClient.GetResponseWithRetry<GetUserResponse>(
     timeout: TimeSpan.FromSeconds(10));
 ```
 
+`retryWaitTime` is currently ignored: the retries run back to back, only timeouts are retried, and when the retries are exhausted `DistributedOperationFailedException` is thrown.
+
 #### Routed Command Client (Dynamic Addressing)
 
 For cases where the target is determined at runtime:
@@ -398,7 +400,7 @@ try
         new CommandSendOptions { Timeout = timeout, Mandatory = true, TimeToLive = timeout },
         cancellationToken);
 }
-catch (CommandNotRoutableException) { /* no consumer registered: returned by the broker in ~1 ms */ }
+catch (CommandNotRoutableException) { /* no consumer registered: returned by the broker within milliseconds */ }
 catch (DistributionTimeoutException) { /* consumer did not answer in time */ }
 catch (DistributedOperationFailedException) { /* consumer faulted / send failed */ }
 // OperationCanceledException from the caller's token is re-thrown unchanged.
@@ -409,10 +411,10 @@ catch (DistributedOperationFailedException) { /* consumer faulted / send failed 
 | Entity | Name | Flags | Why |
 |---|---|---|---|
 | Queue | `{prefix}-{commandName}` | durable, auto-delete, **non-exclusive** | MassTransit forces `exclusive` on every non-durable auto-delete queue (`BrokerTopologyBuilder.QueueDeclare`), so a second process would fail with `RESOURCE_LOCKED` and its endpoint would never become ready. Durable + auto-delete is non-exclusive and is still removed when the last consumer leaves (graceful stop, or broker-detected dead connection). |
-| Send exchange | `{prefix}-{commandName}::send` (fanout) | durable, **not** auto-delete | Stable target for senders. The endpoint's own exchange is auto-deleted together with the queue; publishing to a deleted exchange closes the channel (404) and the next send took ~6 s to recover. A `mandatory` send to the stable exchange with no bound queue is returned in ~1 ms. |
+| Send exchange | `{prefix}-{commandName}::send` (fanout) | durable, **not** auto-delete | Stable target for senders. The endpoint's own exchange is auto-deleted together with the queue; publishing to a deleted exchange closes the channel (404) and the next send took ~6 s to recover. A `mandatory` send to the stable exchange with no bound queue is returned within milliseconds. |
 | Endpoint exchange | `{prefix}-{commandName}` | durable, auto-delete | MassTransit's per-endpoint exchange; not used by senders. |
 
-**`mandatory` and publisher confirms.** MassTransit 8.5.10 enables RabbitMQ publisher confirmation by default
+**`mandatory` and publisher confirms.** MassTransit 8.5.x (checked with 8.5.10) enables RabbitMQ publisher confirmation by default
 (`ConfigurationHostSettings.PublisherConfirmation = true`), which is what surfaces a `basic.return` as an exception.
 No bus configuration change is needed. Measured on a local RabbitMQ container: round trip p50 0.91 ms (non-mandatory)
 vs 0.95 ms (mandatory); return without a bound queue 0–2 ms (integration test `CommandSendOptionsTests`).
@@ -696,7 +698,7 @@ public class ReportService
         await _cacheService.DeleteAllExpiredCacheStreamsAsync(tenantId);
     }
 
-    // Delete all files for a tenant
+    // Delete all files of a tenant that have an expiry (files without a time to live are kept)
     public async Task DeleteAllFiles(string tenantId)
     {
         await _cacheService.DeleteAllCacheStreamsAsync(tenantId);
@@ -746,7 +748,7 @@ public class ScheduledJobService
 
         await _eventHub.ScheduleRecurringSendAsync(
             new GenerateReportEvent { ReportType = "daily" },
-            destinationQueueAddress: "report-processor",
+            destinationQueueAddress: "queue:report-processor",
             options);
     }
 
@@ -766,7 +768,7 @@ public class ScheduledJobService
 
         await _eventHub.ScheduleRecurringSendAsync(
             new GenerateReportEvent { ReportType = "digest" },
-            destinationQueueAddress: "report-processor",
+            destinationQueueAddress: "queue:report-processor",
             options);
     }
 
@@ -782,7 +784,7 @@ public class ScheduledJobService
 
         await _eventHub.ScheduleRecurringSendAsync(
             new SyncEvent(),
-            destinationQueueAddress: "sync-processor",
+            destinationQueueAddress: "queue:sync-processor",
             options);
     }
 
@@ -901,7 +903,7 @@ public async Task<GetUserResponse?> GetUserSafe(string userId)
 | Property | Type | Description |
 |----------|------|-------------|
 | `UniqueServiceAddress` | `string` | **Required.** Unique name of the service |
-| `InstancePrefix` | `string` | **Required.** Prefix for queue/exchange isolation |
+| `InstancePrefix` | `string` | Prefix for queue/exchange isolation (default `default`; setting it blank is rejected) |
 | `AutomaticallyStartBusDuringStartup` | `bool` | Auto-start bus (Default: `true`) |
 | `SchedulerEndpointAddress` | `string` | Scheduler queue address (Default: `queue:scheduler`) |
 
@@ -922,7 +924,7 @@ public async Task<GetUserResponse?> GetUserSafe(string userId)
 | `RepositoryAllowInsecureTls` | `bool` | `false` | Allow insecure TLS |
 | `DatabaseAuthenticationSource` | `string` | `admin` | MongoDB auth database |
 
-**Broker credentials.** When `BrokerUser` or `BrokerPassword` is null or whitespace, MassTransit 8.5.10 does not
+**Broker credentials.** When `BrokerUser` or `BrokerPassword` is null or whitespace, MassTransit 8.5.x (checked with 8.5.10) does not
 apply it and the RabbitMQ client default stays (`ConnectionFactory.DefaultUser`/`DefaultPass`, both `guest`); user and password
 are decided independently. The connections the library opens itself next to the bus (the legacy command bridge, the Hangfire
 legacy binding cleanup) are built by `BrokerConnectionFactory` with exactly this rule, so they always connect as the same user
@@ -984,15 +986,15 @@ The system uses the following naming schema for queues and exchanges:
 
 | Pattern | Queue Name |
 |---------|------------|
-| Broadcast | `{InstancePrefix}:octo::service::{ServiceName}-{InstanceId}` |
-| Routed | `{InstancePrefix}:{DestinationAddress}` |
-| Command | `{InstancePrefix}:{CommandName}` |
+| Broadcast | `{InstancePrefix}-octo::service::{ServiceName}-{InstanceId}` |
+| Routed | `{InstancePrefix}-{DestinationAddress}` |
+| Command | `{InstancePrefix}-{CommandName}` |
 | Shared command (options overloads) | queue `{InstancePrefix}-{CommandName}`, send exchange `{InstancePrefix}-{CommandName}::send` |
 
-Example with `InstancePrefix = "prod"`:
-- Broadcast: `prod:octo::service::UserService-abc123`
-- Routed: `prod:data-processor`
-- Command: `prod:get-user`
+The prefix is lower-cased. Example with `InstancePrefix = "prod"`:
+- Broadcast: `prod-octo::service::UserService-abc123`
+- Routed: `prod-data-processor`
+- Command: `prod-get-user`
 
 ---
 

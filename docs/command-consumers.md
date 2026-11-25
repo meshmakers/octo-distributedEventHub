@@ -1,13 +1,13 @@
 ---
 description: Exclusive versus shared command consumers: topologies, the legacy bridge and its probe, rolling update, consumers in the monorepo
-applies_to: src/DistributionEventHub/Services/Legacy*.cs, src/DistributionEventHub/Services/EventHubControl.cs, src/DistributionEventHub/Configuration/BrokerConnectionFactory.cs, tests/**/Legacy*.cs
+applies_to: src/**/Services/Legacy*.cs, src/**/EventHubControl.cs, src/**/BrokerConnectionFactory.cs, tests/**/Legacy*.cs
 ---
 
 ### Command consumers: exclusive (classic) versus shared
 
 `AddCommandConsumer(name)` and `RegisterCommandConsumer(name, handler)` (without options) declare a non-durable
 auto-delete queue, which MassTransit forces to **exclusive**: one process at a time consumes the command, further
-replicas wait. This is **deprecated** (a warning is logged once per command name; no `[Obsolete]`, because every consumer
+replicas wait. This is **deprecated** (a warning is logged once per command name and process, for `AddCommandConsumer(name)` as one combined line at bus start; no `[Obsolete]`, because every consumer
 repository builds with warnings as errors). The shared topology consumes the same command with any number of replicas.
 
 | | Classic (exclusive) | Shared, plain (CK methods) | Shared, migrating (`MigratesLegacyCommand = true`) |
@@ -62,7 +62,7 @@ testcontainer), `Bound_ClassicConsumerAppears_PublishProbeSeesIt_…`, `SharedQu
 `FakeTimeProvider` tick by tick (`CompletedPasses` is the sync point), because the wall-clock version failed under the full
 parallel suite from host scheduling delays, not from the bridge (`docs/TEST-CONCEPT.md`, "Timing assertions under parallel load").
 **Broker credentials:** the bridge and the Hangfire legacy binding cleanup build their RabbitMQ connection with
-`Configuration/BrokerConnectionFactory`, which applies `BrokerUser`/`BrokerPassword` exactly like MassTransit 8.5.10 (null or
+`Configuration/BrokerConnectionFactory`, which applies `BrokerUser`/`BrokerPassword` like MassTransit 8.5.x, checked with 8.5.10 (null or
 whitespace → not applied, RabbitMQ client default `guest`). Never assign `RabbitMqTransportOptions.User`/`Pass` to a
 `ConnectionFactory` directly: with no broker user configured that throws `Value cannot be null (Parameter 'userName')` while
 the bus connects. Tests: `BrokerConnectionFactoryTests`, `NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds`.
