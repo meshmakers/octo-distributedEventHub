@@ -16,13 +16,13 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.Configuration;
 ///         verbatim — the endpoint name formatter, and with it the instance prefix, is never applied. The
 ///         queue was therefore called <c>hangfire</c> in EVERY OctoMesh instance, while the message
 ///         exchanges bound into it are instance-prefixed (<c>dev-MassTransit.Scheduling:ScheduleRecurringMessage</c>).
-///         On a broker shared by two instances (test-2: <c>main</c> and <c>dev</c>) both bot services consumed
+///         On a broker shared by two instances (a test environment: <c>main</c> and <c>dev</c>) both bot services consumed
 ///         the same queue as competing consumers, so a recurring schedule of one instance was stored by
 ///         whichever bot service picked it up — in that instance's Hangfire database. The job still fired
 ///         into the right instance (the destination address is absolute), but
 ///         <c>RemoveRecurringJobsByScheduleGroup</c> is a prefixed command and only reaches the own bot
 ///         service: a schedule that landed in the foreign database could never be removed again. Seen on
-///         test-2-dev 2026-10-07: two cron ticks per interval after a tenant update, one left after
+///         a shared test environment on 2026-10-07: two cron ticks per interval after a tenant update, one left after
 ///         <c>UndeployTriggers</c>.
 ///     </para>
 /// </remarks>

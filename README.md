@@ -77,7 +77,7 @@ Any number of commands per service can be migrated; each gets its own legacy bri
 the first migrated command of a process, AB#8368).
 A consumer that must stay exclusive (exactly one instance owns the address) declares it with
 `CommandConsumerOptions.ExclusiveByDesign("<reason>")`: same exclusive topology, no deprecation warning; an empty reason is
-rejected (`docs/DEVELOPER.md` -> "Exclusive by design (AB#8363)").
+rejected (`docs/DEVELOPER.md` -> "Exclusive by design").
 
 ### 4. MongoDB File Caching
 **Implementation:** `DistributedCacheService`
