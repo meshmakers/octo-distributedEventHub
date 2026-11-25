@@ -100,12 +100,15 @@ must be added to the build step's project list. Set `OCTO_DEH_TEST_LOG=/path/fil
   `AddCommandConsumer(name)` / `RegisterCommandConsumer(name, handler)` is pinned by
   `tests/DistributionEventHub.IntegrationTests/Messaging/LegacyCommandEndpointUnchangedTests.cs:20`, the conflict by
   `LegacyCommandMigrationTests.cs:386`. Exception: the scheduler queue became `{prefix}-hangfire`, and a bus observer
-  unbinds the old exchanges (`src/DistributionEventHub/Configuration/HangfireSchedulerTopology.cs:34`). Detail:
-  `docs/command-consumers.md`.
+  unbinds the old exchanges (`LegacyHangfireSchedulerBindingRemover`,
+  `src/DistributionEventHub/Configuration/HangfireSchedulerTopology.cs:62`). Detail: `docs/command-consumers.md`.
 - **Every queue, exchange and scheduler name goes through the instance prefix.** Instances (environments) share one
   RabbitMQ cluster; `CacheCommon.ApplyInstancePrefix` and `ApplyInstancePrefixToUri`
-  (`src/DistributionEventHub/CacheCommon.cs:60`, `:71`) are the places that apply it. The scheduler queue once
-  bypassed it, and two instances stored each other's recurring jobs (`HangfireSchedulerTopology.cs:17`).
+  (`src/DistributionEventHub/CacheCommon.cs:60`, `:71`) apply it to explicit names, and the exchanges of message types
+  and the auto-configured endpoints get it from `PrefixEntityNameFormatter` and `DefaultEndpointNameFormatter`, both
+  built with `CacheCommon.GetInstancePrefix` (`CacheCommon.cs:25`;
+  `src/DistributionEventHub/Configuration/DependencyInjection/ServiceCollectionExtensions.cs:139-144`). The scheduler
+  queue once bypassed it, and two instances stored each other's recurring jobs (`HangfireSchedulerTopology.cs:17`).
   Pinned by `InstanceIsolationTests` and `HangfireSchedulerIsolationTests` (integration project, `Messaging/`).
   Detail: `docs/configuration-and-scheduling.md`.
 - **A new endpoint, binding or publish must work for the restricted adapter user.** Adapters and edge sites connect
@@ -120,5 +123,9 @@ must be added to the build step's project list. Set `OCTO_DEH_TEST_LOG=/path/fil
   (`src/DistributionEventHub/Configuration/BrokerConnectionFactory.cs:27`, the only `new ConnectionFactory` in
   `src/`). It applies `BrokerUser` and `BrokerPassword` the way MassTransit does (null or whitespace: not applied, the
   RabbitMQ client default stays); assigning them directly fails while the bus connects when no broker user is
-  configured (`BrokerConnectionFactoryTests`,
-  `NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds`).
+  configured (unit tests `tests/DistributionEventHub.UnitTests/Configuration/BrokerConnectionFactoryTests.cs:15`;
+  integration test `NoBrokerUserConfigured_ConnectsWithTheMassTransitDefaults_AndBinds`,
+  `tests/DistributionEventHub.IntegrationTests/Messaging/LegacyCommandBridgeTests.cs:106`). Exception: seven
+  integration tests open a raw `new ConnectionFactory` on purpose, to inspect the broker topology or connect as a
+  given user (for example `tests/DistributionEventHub.IntegrationTests/Messaging/CommandDeliveryTests.cs:69`,
+  `RestrictedAdapterUserTests.cs:83`).

@@ -1,5 +1,5 @@
 ---
-description: Exclusive versus shared command consumers: topologies, the legacy bridge and its probe, rolling update, consumers in the monorepo
+description: "Exclusive versus shared command consumers: topologies, the legacy bridge and its probe, rolling update, consumers in the monorepo"
 applies_to: src/**/Services/Legacy*.cs, src/**/EventHubControl.cs, src/**/BrokerConnectionFactory.cs, tests/**/Legacy*.cs
 ---
 
