@@ -1,3 +1,7 @@
+---
+description: Test concept: unit and integration tests, fixtures, timing assertions under parallel load
+applies_to: tests/**
+---
 # Test Concept - DistributionEventHub
 
 This document describes the testing strategy for the DistributionEventHub library, covering unit tests and integration tests.

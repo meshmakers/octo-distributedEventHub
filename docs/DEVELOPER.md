@@ -1,3 +1,7 @@
+---
+description: Developer guide of the event hub: usage, topology, gotchas, command migration, broker permissions
+applies_to: src/**
+---
 # Developer Documentation - DistributionEventHub
 
 This documentation describes the implementation and usage of the DistributionEventHub for OctoMesh services.
