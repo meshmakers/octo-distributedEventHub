@@ -19,7 +19,7 @@ namespace Meshmakers.Octo.Common.DistributionEventHub.IntegrationTests.Messaging
 ///     Before the fix both bot services consumed the un-prefixed queue <c>hangfire</c> as competing
 ///     consumers; a recurring schedule of one instance was stored by whichever picked it up, in that
 ///     instance's Hangfire database, where the owning instance's RemoveRecurringJobsByScheduleGroup can
-///     never reach it (test-2-dev: doubled cron ticks, one surviving UndeployTriggers). Hangfire itself is
+///     never reach it (a shared test environment: doubled cron ticks, one surviving UndeployTriggers). Hangfire itself is
 ///     replaced by a recorder: what is under test is which instance's scheduler consumer receives the
 ///     schedule.
 /// </remarks>
@@ -82,7 +82,7 @@ public class HangfireSchedulerIsolationTests(RabbitMqFixture rabbitMq) : IAsyncL
     }
 
     /// <summary>
-    ///     N7 (test-2-dev, 2026-10-08): an UNCHANGED schedule re-registered over and over — what every
+    ///     N7 (shared test environment, 2026-10-08): an UNCHANGED schedule re-registered over and over — what every
     ///     tenant update and every DeployTriggers does — must be in the own instance's scheduler after
     ///     EVERY cycle.
     /// </summary>
@@ -92,7 +92,7 @@ public class HangfireSchedulerIsolationTests(RabbitMqFixture rabbitMq) : IAsyncL
     ///     receives) followed by "publish the schedule again". With the shared un-prefixed queue RabbitMQ
     ///     hands consecutive schedules round-robin to the two bot services, so with nothing else on the
     ///     broker every SECOND publish was stored by the other instance while the remove had already
-    ///     emptied the own database: measured on test-2-dev as LOST, present, LOST, present … over eight
+    ///     emptied the own database: measured on a shared test environment as LOST, present, LOST, present … over eight
     ///     DeployTriggers, and the same on tenant updates. Each cycle here waits until the schedule has
     ///     been stored by SOME instance before it looks, so a regression shows the exact pattern instead of
     ///     a timeout.

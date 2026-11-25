@@ -28,7 +28,7 @@ internal enum LegacyClassicProbeKind
 ///         <b>Why two probes.</b> After the migration the classic queue does not exist, and every passive declare of a
 ///         missing queue is two ERROR lines in RabbitMQ's log ("channel exception not_found" + "Channel error on
 ///         connection"). The back-off of AB#8404 bounded them per bridge, but one bridge runs per migrated command and
-///         replica, so the rate still grew with the replica count (test-2 with two replicas: 0.233 ERROR lines/s, above the
+///         replica, so the rate still grew with the replica count (a test environment with two replicas: 0.233 ERROR lines/s, above the
 ///         0.2/s alarm). A mandatory publish to the default exchange answers the same question — does a queue with this
 ///         name exist? — without any channel exception.
 ///     </para>
