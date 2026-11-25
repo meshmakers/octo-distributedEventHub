@@ -903,7 +903,7 @@ public async Task<GetUserResponse?> GetUserSafe(string userId)
 | Property | Type | Description |
 |----------|------|-------------|
 | `UniqueServiceAddress` | `string` | **Required.** Unique name of the service |
-| `InstancePrefix` | `string` | Prefix for queue/exchange isolation (default `default`; setting it blank is rejected) |
+| `InstancePrefix` | `string` | Prefix for queue/exchange isolation (default `default`; a blank value in appsettings falls back to `default`, a blank value set in code is not checked) |
 | `AutomaticallyStartBusDuringStartup` | `bool` | Auto-start bus (Default: `true`) |
 | `SchedulerEndpointAddress` | `string` | Scheduler queue address (Default: `queue:scheduler`) |
 

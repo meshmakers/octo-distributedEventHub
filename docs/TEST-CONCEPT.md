@@ -9,7 +9,7 @@ Read the tests themselves for the behaviour they pin; this file only says how th
 
 | Project | Needs | Mocks and fixtures | Trait |
 |---|---|---|---|
-| `tests/DistributionEventHub.UnitTests` | nothing | Moq for the bus, the download and tenant seams | `Category=Unit` |
+| `tests/DistributionEventHub.UnitTests` | nothing | Moq for the bus, the download and tenant seams | partly `Category=Unit` (filter by project) |
 | `tests/DistributionEventHub.IntegrationTests` | Docker (Testcontainers) | a real RabbitMQ and MongoDB | `Category=Integration`, plus `RoutedEventExplicitQueue` and `RoutedEventLatestOnly` on two classes |
 
 ## Unit tests
